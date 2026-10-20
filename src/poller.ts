@@ -40,7 +40,7 @@ async function companyIdForOpportunity(id: string, deps: PollerDeps): Promise<st
   }
   if (companyIds.has(id)) return companyIds.get(id)!;
   const companyId = (await deps.twenty.getOpportunity(id))?.companyId ?? null;
-  companyIds.set(id, companyId);
+  if (companyId !== null) companyIds.set(id, companyId);
   return companyId;
 }
 
