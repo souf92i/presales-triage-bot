@@ -24,8 +24,9 @@ describe('Twenty client', () => {
     expect(fetch).toHaveBeenCalledWith('https://crm.test/rest/opportunities/2341bae4-2621-4cf5-b5f3-ffe7ae25362d', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer k', Accept: 'application/json' }) }));
   });
 
-  it('returns null on 404 and for a deleted record', async () => {
-    await expect(client(fakeFetch(new Response(null, { status: 404 }))).getOpportunity('x')).resolves.toBeNull();
+  it('returns null only for JSON 404 responses and for a deleted record', async () => {
+    await expect(client(fakeFetch(json({ error: 'not found' }, 404))).getOpportunity('x')).resolves.toBeNull();
+    await expect(client(fakeFetch(new Response('<html>not found</html>', { status: 404 }))).getOpportunity('x')).rejects.toMatchObject({ dependency: 'twenty' } satisfies Partial<DependencyError>);
     await expect(client(fakeFetch(json({ data: { opportunity: { ...opportunity, deletedAt: '2026-01-01' } } }))).getOpportunity('x')).resolves.toBeNull();
   });
 
@@ -52,7 +53,7 @@ describe('Twenty client', () => {
 
   it('getCompany maps and returns null on 404', async () => {
     await expect(client(fakeFetch(json({ data: { company: { id: 'c', name: 'Acme', deletedAt: null } } }))).getCompany('c')).resolves.toEqual({ id: 'c', name: 'Acme' });
-    await expect(client(fakeFetch(new Response(null, { status: 404 }))).getCompany('c')).resolves.toBeNull();
+    await expect(client(fakeFetch(json({ error: 'not found' }, 404))).getCompany('c')).resolves.toBeNull();
   });
 
   it('lists notes in two steps with pagination', async () => {

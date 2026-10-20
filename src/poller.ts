@@ -22,6 +22,8 @@ type Candidate = IssueWithComments & ReturnType<typeof ticketInput> & {
   readonly startedFrom: StartedFrom;
 };
 
+const opportunityCompanyIds = new WeakMap<TwentyClient, Map<string, string | null>>();
+
 function logError(error: unknown, phase: string, deps: PollerDeps): void {
   if (error instanceof DependencyError) {
     deps.log('warn', phase, { dependency: error.dependency, error: error.message });
@@ -30,13 +32,37 @@ function logError(error: unknown, phase: string, deps: PollerDeps): void {
   }
 }
 
+async function companyIdForOpportunity(id: string, deps: PollerDeps): Promise<string | null> {
+  let companyIds = opportunityCompanyIds.get(deps.twenty);
+  if (companyIds === undefined) {
+    companyIds = new Map();
+    opportunityCompanyIds.set(deps.twenty, companyIds);
+  }
+  if (companyIds.has(id)) return companyIds.get(id)!;
+  const companyId = (await deps.twenty.getOpportunity(id))?.companyId ?? null;
+  companyIds.set(id, companyId);
+  return companyId;
+}
+
+function randomForIssue(id: string): Random {
+  let seed = 0;
+  for (const character of id) seed = Math.imul(seed ^ character.charCodeAt(0), 0x01000193);
+  return () => {
+    seed += 0x6d2b79f5;
+    let value = seed;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
 async function indexIssue(issue: LinearIssue, deps: PollerDeps): Promise<void> {
   const { config, store } = deps;
   const form = parseAsksForm(issue.description, issue.attachmentTitles, config.placeholderValues);
   const kind = (form && mapRequestType(form.requestType, config.requestTypes)?.kind)
     ?? kindFromLabels(issue.labels.map(({ name }) => name), config.requestTypes);
   const link = form === null ? null : resolveCrmLink(form.crmLinkRaw, form.target);
-  const companyId = link?.kind === 'opportunity' ? (await deps.twenty.getOpportunity(link.id))?.companyId ?? null
+  const companyId = link?.kind === 'opportunity' ? await companyIdForOpportunity(link.id, deps)
     : link?.kind === 'company' ? link.id : null;
   if (companyId === null) { store.index.delete(issue.id); return; }
   store.index.upsert({
@@ -75,7 +101,7 @@ async function recheckIds(deps: PollerDeps): Promise<{ issueIds: ReadonlySet<str
     const comments = await deps.linear.listCommentsCreatedSince(deps.config.teamKey, cursor);
     for (const comment of comments) {
       const record = deps.store.tickets.get(comment.issueId);
-      if (record?.status === 'denied' || (record?.startedFrom === 'canceled' && ['handed_off', 'pending_retry'].includes(record.status))) {
+      if ((record?.status === 'denied' && record.mode === 'enforce') || (record?.startedFrom === 'canceled' && ['handed_off', 'pending_retry'].includes(record.status))) {
         issueIds.add(comment.issueId);
       }
       if (comment.createdAt > latest) latest = comment.createdAt;
@@ -178,7 +204,7 @@ async function evaluateCandidate(candidate: Candidate, mode: Mode, deps: PollerD
   try {
     outcome = await evaluateTicket({
       ...candidate, lastAskKeys: candidate.record?.lastAskKeys ?? [],
-    }, { ...deps, history: deps.store.index });
+    }, { ...deps, history: deps.store.index, random: randomForIssue(candidate.issue.id) });
     if (outcome.kind === 'evaluated' && outcome.result.verdict === 'pending_retry') {
       await failCandidate(candidate, mode, outcome, new Error(outcome.result.errors.join('; ')), deps);
       return;

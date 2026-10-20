@@ -4,7 +4,7 @@ import type { LinearComment, LinearIssue, LinearWorkspace } from '../src/clients
 import { defaultConfig } from '../src/config.js';
 import type { TicketFacts } from '../src/domain/types.js';
 import { DependencyError } from '../src/errors.js';
-import { runTick, type PollerDeps } from '../src/poller.js';
+import { refreshIndex, runTick, type PollerDeps } from '../src/poller.js';
 import { openStore, type Store } from '../src/store/store.js';
 import { PRE_301 } from './fixtures/asks.js';
 import { baseFacts, COMPANY_ID, ev, NOW, OPP_ID } from './helpers/facts.js';
@@ -97,6 +97,16 @@ describe('runTick', () => {
     expect(await botComments(s)).toHaveLength(1); expect(s.deps.llm.inputs.ticket).toHaveLength(1);
   });
 
+  it('uses the same free-member order for repeated evaluations of a ticket', async () => {
+    const s = setup();
+    const values = [0, 0, 0.99, 0.99];
+    s.deps.random = () => values.shift() ?? 0;
+    await runTick(s.deps);
+    await change(s, {}, { body: 'Updated requirements' });
+    await runTick(s.deps);
+    expect(audits(s)[1]?.annotations).toEqual(audits(s)[0]?.annotations);
+  });
+
   it('re-evaluates after a requester reply but not after someone else\'s comment', async () => {
     const s = setup(); await runTick(s.deps);
     await change(s, {}, { authorId: 'someone', authorName: 'Someone' }); await runTick(s.deps);
@@ -139,6 +149,17 @@ describe('runTick', () => {
     expect(record(s)?.status).toBe(requester ? 'accepted' : 'denied');
     expect((await s.deps.linear.getIssue(s.issue.id))?.stateId).toBe(requester ? 'triage' : 'canceled');
     expect(audits(s)).toHaveLength(requester ? 2 : 1);
+  });
+
+  it('does not reopen a shadow-mode denial after a recheck reply', async () => {
+    const s = setup(true); await change(s, { description: s.issue.description.replaceAll(OPP_ID, 'invalid') });
+    await runTick(s.deps);
+    s.deps.store.tickets.upsert({ ...record(s)!, mode: 'shadow' });
+    s.time('2026-10-20T12:04:00.000Z'); await change(s, { description: s.issue.description }, { body: 'recheck' });
+    await runTick(s.deps);
+    expect(record(s)).toMatchObject({ status: 'denied', mode: 'shadow' });
+    expect((await s.deps.linear.getIssue(s.issue.id))?.stateId).toBe('canceled');
+    expect(audits(s)).toHaveLength(1);
   });
 
   it('first run starts the comment cursor at now', async () => {
@@ -351,10 +372,26 @@ describe('runTick', () => {
   });
 
   it('does not advance the index cursor when resolving a changed issue fails', async () => {
-    const s = setup(); await runTick(s.deps); s.time('2026-10-20T12:02:00.000Z'); await change(s);
+    const s = setup(); await runTick(s.deps); s.time('2026-10-20T12:02:00.000Z');
+    await change(s, { description: s.issue.description.replaceAll(OPP_ID, '22222222-2222-4222-8222-222222222222') });
     vi.spyOn(s.deps.twenty, 'getOpportunity').mockRejectedValueOnce(new DependencyError('twenty', 'offline'));
     await runTick(s.deps); expect(s.deps.store.cursors.get('index_updated_at')).toBe(NOW);
-    expect(audits(s)).toHaveLength(1);
+    expect(audits(s)).toHaveLength(2);
+  });
+
+  it('does not re-request resolved opportunities after a partial index refresh fails', async () => {
+    const s = setup();
+    const secondOpportunityId = '22222222-2222-4222-8222-222222222222';
+    const second = { ...s.issue, id: 'issue-2', identifier: 'PRE-901', number: 901,
+      description: s.issue.description.replaceAll(OPP_ID, secondOpportunityId), updatedAt: '2026-10-20T10:01:00.000Z' };
+    s.deps.linear = new MemoryLinear({ issues: [{ issue: s.issue, comments: [] }, { issue: second, comments: [] }], viewerId: 'bot', workspace }, s.deps.clock);
+    const actual = s.deps.twenty.getOpportunity.bind(s.deps.twenty);
+    const getOpportunity = vi.spyOn(s.deps.twenty, 'getOpportunity')
+      .mockImplementationOnce(actual)
+      .mockRejectedValueOnce(new DependencyError('twenty', 'offline'));
+    await expect(refreshIndex(s.deps)).rejects.toMatchObject({ dependency: 'twenty' });
+    await refreshIndex(s.deps);
+    expect(getOpportunity.mock.calls.map(([id]) => id)).toEqual([OPP_ID, secondOpportunityId, secondOpportunityId]);
   });
 
   it('deletes an expired wait when its issue no longer exists', async () => {

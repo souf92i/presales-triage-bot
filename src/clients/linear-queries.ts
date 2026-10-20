@@ -2,16 +2,16 @@ export const VIEWER = `query Viewer { viewer { id } }`;
 export const ISSUE_FIELDS = `fragment IssueFields on Issue {
   id identifier number title description createdAt updatedAt completedAt
   state { id type } assignee { id email name }
-  labels(first: 50) { nodes { id name } } attachments(first: 50) { nodes { title } }
+  labels(first: 20) { nodes { id name } } attachments(first: 10) { nodes { title } }
 }`;
 export const COMMENT_FIELDS = `fragment CommentFields on Comment {
   id body createdAt parent { id } user { id name } externalUser { name } botActor { name } issue { id }
 }`;
 export const TRIAGE_ISSUES = `${ISSUE_FIELDS}\n${COMMENT_FIELDS}\nquery TriageIssues($teamKey: String!, $after: String) {
-  issues(first: 50, after: $after, filter: { team: { key: { eq: $teamKey } }, state: { type: { eq: "triage" } } }) {
+  issues(first: 10, after: $after, filter: { team: { key: { eq: $teamKey } }, state: { type: { eq: "triage" } } }) {
     nodes { ...IssueFields comments(first: 100) { nodes { ...CommentFields } } } pageInfo { hasNextPage endCursor } } }`;
 export const ISSUES_UPDATED_SINCE = `${ISSUE_FIELDS}\nquery IssuesUpdatedSince($teamKey: String!, $since: DateTimeOrDuration!, $after: String) {
-  issues(first: 100, after: $after, includeArchived: true, orderBy: updatedAt,
+  issues(first: 50, after: $after, includeArchived: true, orderBy: updatedAt,
          filter: { team: { key: { eq: $teamKey } }, updatedAt: { gt: $since } }) {
     nodes { ...IssueFields } pageInfo { hasNextPage endCursor } } }`;
 export const ISSUE = `${ISSUE_FIELDS}\nquery Issue($id: String!) { issue(id: $id) { ...IssueFields } }`;

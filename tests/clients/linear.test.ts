@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DependencyError } from '../../src/errors.js';
 import { createLinearClient } from '../../src/clients/linear.js';
+import { ISSUE_FIELDS, ISSUES_UPDATED_SINCE, TRIAGE_ISSUES } from '../../src/clients/linear-queries.js';
 
 function json(value: unknown, status = 200): Response { return new Response(JSON.stringify(value), { status }); }
 function linearFetch(...responses: Response[]): any {
@@ -18,6 +19,14 @@ function issue(id: string, extra: Record<string, unknown> = {}) { return { id, i
 function comment(id: string, extra: Record<string, unknown> = {}) { return { id, body: 'Body', createdAt: '2026-01-01', parent: null, user: null, externalUser: null, botActor: null, issue: { id: 'issue' }, ...extra }; }
 
 describe('Linear client', () => {
+  it('uses bounded connection sizes in polling queries', () => {
+    expect(ISSUE_FIELDS).toContain('labels(first: 20)');
+    expect(ISSUE_FIELDS).toContain('attachments(first: 10)');
+    expect(TRIAGE_ISSUES).toContain('issues(first: 10,');
+    expect(TRIAGE_ISSUES).toContain('comments(first: 100)');
+    expect(ISSUES_UPDATED_SINCE).toContain('issues(first: 50,');
+  });
+
   it('fetches a client-credentials token with Basic auth and reuses it', async () => {
     const fetch = linearFetch(oauthToken(), data({ viewer: { id: 'viewer' } }), data({ viewer: { id: 'viewer' } })); const { client: linear } = client(fetch);
     await expect(linear.getViewerId()).resolves.toBe('viewer'); await linear.getViewerId();

@@ -31,7 +31,7 @@ function parse<T>(schema: z.ZodType<T>, value: unknown, path: string): T {
 }
 async function get(context: Context, path: string): Promise<{ status: number; body: unknown }> {
   const result = await requestJson('twenty', context.fetchFn, `${context.root}${path}`, { method: 'GET', headers: context.headers });
-  if (result.status !== 404 && (result.status < 200 || result.status >= 300)) throw new DependencyError('twenty', `Twenty returned ${result.status} for ${path}`);
+  if ((result.status === 404 && result.body === null) || (result.status !== 404 && (result.status < 200 || result.status >= 300))) throw new DependencyError('twenty', `Twenty returned ${result.status} for ${path}`);
   return result;
 }
 async function list<T>(context: Context, plural: string, filter: string, schema: z.ZodType<T>): Promise<T[]> {
