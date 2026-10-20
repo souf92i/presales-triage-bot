@@ -3,13 +3,11 @@ import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 
 import { ConfigError } from './errors.js';
-import { REQUEST_KINDS, type RequestKind, type TemplateLanguage } from './domain/types.js';
+import { QUOTE_STATUSES, REQUEST_KINDS, type RequestKind, type TemplateLanguage } from './domain/types.js';
 import { RULE_IDS } from './rules/types.js';
 
 export interface PoolMember { email: string; active: boolean }
 export interface RequestTypeMapping { formValue: string; kind: RequestKind; label: string }
-
-const quoteStatuses = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'] as const;
 
 function isValidTimeZone(timezone: string): boolean {
   try {
@@ -41,7 +39,7 @@ const requestTypes: readonly RequestTypeMapping[] = [
 export const ConfigSchema = z.object({
   teamKey: z.string().default('PRE'),
   triageOwnerEmail: z.string().default('ela@evertrust.fr'),
-  pool: z.array(z.object({ email: z.string(), active: z.boolean() })).min(1).refine(
+  pool: z.array(z.object({ email: z.string(), active: z.boolean() })).refine(
     (pool) => pool.some((member) => member.active),
     'pool must have at least one active member',
   ).default(() => [
@@ -68,8 +66,8 @@ export const ConfigSchema = z.object({
   })).default(() => [...requestTypes]),
   pocProducts: z.array(z.string()).default(() => []),
   pocQuoteLinePattern: z.string().refine(isValidPattern, 'must be a valid regular expression').default('\\bpoc\\b|proof of concept'),
-  pocQuoteExcludedStatuses: z.array(z.enum(quoteStatuses)).default(
-    () => ['EXPIRED', 'REJECTED'] as ('EXPIRED' | 'REJECTED')[],
+  pocQuoteExcludedStatuses: z.array(z.enum(QUOTE_STATUSES)).default(
+    (): (typeof QUOTE_STATUSES)[number][] => ['EXPIRED', 'REJECTED'],
   ),
   placeholderValues: z.array(z.string()).default(() => ['TBD', '?', '-', 'n/a', 'xxx', 'à définir', 'unknown', '']),
   llmModel: z.string().default('claude-sonnet-5-5'),
@@ -91,7 +89,8 @@ export function loadConfig(path: string, readFile: (path: string) => string = (f
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
       return defaultConfig();
     }
-    throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ConfigError(`Cannot read config ${path}: ${message}`);
   }
 
   try {
@@ -125,28 +124,26 @@ export interface Env {
   ALERT_WEBHOOK_URL: string | undefined; CONFIG_PATH: string; DB_PATH: string;
 }
 
-const requiredEnv = [
-  'LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET', 'TWENTY_BASE_URL', 'TWENTY_API_KEY',
-  'GRAPH_TENANT_ID', 'GRAPH_CLIENT_ID', 'GRAPH_CLIENT_SECRET', 'ANTHROPIC_API_KEY',
-] as const;
+const EnvSchema = z.object({
+  LINEAR_CLIENT_ID: z.string().min(1),
+  LINEAR_CLIENT_SECRET: z.string().min(1),
+  TWENTY_BASE_URL: z.string().min(1),
+  TWENTY_API_KEY: z.string().min(1),
+  GRAPH_TENANT_ID: z.string().min(1),
+  GRAPH_CLIENT_ID: z.string().min(1),
+  GRAPH_CLIENT_SECRET: z.string().min(1),
+  ANTHROPIC_API_KEY: z.string().min(1),
+  ALERT_WEBHOOK_URL: z.string().optional(),
+  CONFIG_PATH: z.string().default('./config.json'),
+  DB_PATH: z.string().default('./data/triage.sqlite'),
+});
 
 export function loadEnv(env: NodeJS.ProcessEnv): Env {
-  const missing = requiredEnv.filter((name) => !env[name]);
-  if (missing.length > 0) {
-    throw new ConfigError(`Missing required environment variables: ${missing.join(', ')}`);
+  const result = EnvSchema.safeParse(env);
+  if (!result.success) {
+    const invalid = result.error.issues.map((issue) => issue.path[0]).join(', ');
+    throw new ConfigError(`Invalid environment variables: ${invalid}`);
   }
 
-  return {
-    LINEAR_CLIENT_ID: env.LINEAR_CLIENT_ID as string,
-    LINEAR_CLIENT_SECRET: env.LINEAR_CLIENT_SECRET as string,
-    TWENTY_BASE_URL: env.TWENTY_BASE_URL as string,
-    TWENTY_API_KEY: env.TWENTY_API_KEY as string,
-    GRAPH_TENANT_ID: env.GRAPH_TENANT_ID as string,
-    GRAPH_CLIENT_ID: env.GRAPH_CLIENT_ID as string,
-    GRAPH_CLIENT_SECRET: env.GRAPH_CLIENT_SECRET as string,
-    ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY as string,
-    ALERT_WEBHOOK_URL: env.ALERT_WEBHOOK_URL,
-    CONFIG_PATH: env.CONFIG_PATH ?? './config.json',
-    DB_PATH: env.DB_PATH ?? './data/triage.sqlite',
-  };
+  return { ...result.data, ALERT_WEBHOOK_URL: result.data.ALERT_WEBHOOK_URL };
 }

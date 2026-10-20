@@ -48,10 +48,15 @@ describe('config', () => {
     expect(managedLabels(config)).toEqual(['demo', 'technical discovery', 'poc', 'rfi rfp']);
   });
 
-  it.each(['{"pollSecond":5}', '{"defaultTimezone":"Mars/Base"}', '{"pocQuoteLinePattern":"("}'])(
-    'rejects invalid configuration %s with ConfigError',
-    (contents) => {
+  it.each([
+    ['{"pollSecond":5}', /pollSecond/],
+    ['{"defaultTimezone":"Mars/Base"}', /defaultTimezone/],
+    ['{"pocQuoteLinePattern":"("}', /pocQuoteLinePattern/],
+  ])(
+    'rejects invalid configuration %s with ConfigError and its offending key',
+    (contents, key) => {
       expect(() => loadConfig('config.json', () => contents)).toThrow(ConfigError);
+      expect(() => loadConfig('config.json', () => contents)).toThrow(key);
     },
   );
 
@@ -72,7 +77,10 @@ describe('config', () => {
   });
 
   it('loadEnv lists every missing variable at once', () => {
-    expect(() => loadEnv({ TWENTY_API_KEY: 'k' })).toThrow(
+    const loadMissingEnv = () => loadEnv({ TWENTY_API_KEY: 'k' });
+
+    expect(loadMissingEnv).toThrow(ConfigError);
+    expect(loadMissingEnv).toThrow(
       /LINEAR_CLIENT_ID.*LINEAR_CLIENT_SECRET.*TWENTY_BASE_URL/s,
     );
   });

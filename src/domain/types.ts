@@ -31,7 +31,8 @@ export interface Opportunity {
 export interface Company { readonly id: string; readonly name: string }
 export interface CrmNote { readonly id: string; readonly createdAt: string; readonly bodyMarkdown: string; readonly target: 'opportunity' | 'company' }
 export interface QuoteLine { readonly productId: string | null; readonly name: string; readonly description: string }
-export interface Quote { readonly id: string; readonly status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'; readonly lines: readonly QuoteLine[] }
+export const QUOTE_STATUSES = ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'] as const;
+export interface Quote { readonly id: string; readonly status: (typeof QUOTE_STATUSES)[number]; readonly lines: readonly QuoteLine[] }
 
 export const QUALIFICATION_ITEMS = ['volume', 'hosting', 'solution', 'decisionMaker', 'budget', 'timeline', 'currentPki', 'useCases', 'clmDriver'] as const;
 export type QualificationItemId = (typeof QUALIFICATION_ITEMS)[number];
