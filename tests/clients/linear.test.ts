@@ -91,7 +91,7 @@ describe('Linear client', () => {
   it('wraps GraphQL errors in DependencyError and returns null for a missing issue', async () => {
     await expect(client(linearFetch(oauthToken(), json({ errors: [{ message: 'bad request' }] }))).client.getViewerId()).rejects.toMatchObject({ dependency: 'linear' } satisfies Partial<DependencyError>);
     const missing = () => json({ data: null, errors: [{ message: 'Entity not found: Issue', extensions: { type: 'invalid input' } }] });
-    await expect(client(linearFetch(oauthToken(), missing())).client.getIssue('missing')).resolves.toBeNull();
+    await expect(client(linearFetch(oauthToken(), json({ errors: [{ message: 'Entity not found: Issue', extensions: { type: 'invalid input' } }] }, 400))).client.getIssue('missing')).resolves.toBeNull();
     await expect(client(linearFetch(oauthToken(), missing())).client.getIssueWithComments('missing')).resolves.toBeNull();
   });
 

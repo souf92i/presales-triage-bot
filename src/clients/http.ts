@@ -6,7 +6,13 @@ export type FetchLike = typeof fetch;
 export async function requestJson(dep: Dependency, fetchFn: FetchLike, url: string, init: RequestInit): Promise<{ status: number; body: unknown }> {
   try {
     const response = await fetchFn(url, init);
-    if (!response.ok) return { status: response.status, body: null };
+    if (!response.ok) {
+      try {
+        return { status: response.status, body: await response.json() };
+      } catch {
+        return { status: response.status, body: null };
+      }
+    }
     let body: unknown;
     try {
       body = await response.json();

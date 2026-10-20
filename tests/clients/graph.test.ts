@@ -23,7 +23,18 @@ describe('Graph client', () => {
   it('reuses the cached token', async () => { const fetch = fakeFetch(token(), schedule([entry('a')]), schedule([entry('a')])); const { client } = graph(fetch); const [s, e] = dates(); await client.getAvailability(['a'], s, e); await client.getAvailability(['a'], s, e); expect(fetch).toHaveBeenCalledTimes(3); });
   it('refreshes the token after expiry', async () => { const fetch = fakeFetch(token(), schedule([entry('a')]), token(), schedule([entry('a')])); const now = clock(); const { client } = graph(fetch, now); const [s, e] = dates(); await client.getAvailability(['a'], s, e); now.mockReturnValue(new Date('2026-10-20T01:00:00Z')); await client.getAvailability(['a'], s, e); expect(fetch).toHaveBeenCalledTimes(4); });
   it('marks busy, tentative and oof overlaps as not free', async () => { const [s, e] = dates(); for (const status of ['busy', 'tentative', 'oof']) { const { client } = graph(fakeFetch(token(), schedule([entry('a', [{ status, start: { dateTime: '2026-10-22T11:30:00' }, end: { dateTime: '2026-10-22T12:30:00' } }])]))); await expect(client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', false]])); } });
-  it('treats free, workingElsewhere and unknown as available, and an item ending at slot start as non-overlapping', async () => { const [s, e] = dates(); const { client } = graph(fakeFetch(token(), schedule([entry('a', ['free', 'workingElsewhere', 'unknown', 'busy'].map((status, index) => ({ status, start: { dateTime: index === 3 ? '2026-10-22T10:00:00' : '2026-10-22T11:20:00' }, end: { dateTime: '2026-10-22T11:00:00' } })))]))); await expect(client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', true]])); });
+  it('treats overlapping free, workingElsewhere and unknown items as available', async () => {
+    const [s, e] = dates();
+    const items = ['free', 'workingElsewhere', 'unknown'].map((status) => ({ status, start: { dateTime: '2026-10-22T11:20:00' }, end: { dateTime: '2026-10-22T11:40:00' } }));
+    const { client } = graph(fakeFetch(token(), schedule([entry('a', items)])));
+    await expect(client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', true]]));
+  });
+  it('treats a busy item ending at slot start as non-overlapping', async () => {
+    const [s, e] = dates();
+    const item = { status: 'busy', start: { dateTime: '2026-10-22T10:00:00' }, end: { dateTime: '2026-10-22T11:00:00' } };
+    const { client } = graph(fakeFetch(token(), schedule([entry('a', [item])])));
+    await expect(client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', true]]));
+  });
   it('throws DependencyError for a schedule error or a missing schedule', async () => { const [s, e] = dates(); await expect(graph(fakeFetch(token(), schedule([{ scheduleId: 'a', error: { code: 'Error' } }]))).client.getAvailability(['a'], s, e)).rejects.toMatchObject({ dependency: 'graph' }); await expect(graph(fakeFetch(token(), schedule([]))).client.getAvailability(['a'], s, e)).rejects.toMatchObject({ dependency: 'graph' }); });
   it('treats a null schedule error as available', async () => { const [s, e] = dates(); await expect(graph(fakeFetch(token(), schedule([{ scheduleId: 'a', error: null }]))).client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', true]])); });
   it('clears the cached token after a 401', async () => { const fetch = fakeFetch(token(), new Response(null, { status: 401 }), token(), schedule([entry('a')])); const { client } = graph(fetch); const [s, e] = dates(); await expect(client.getAvailability(['a'], s, e)).rejects.toMatchObject({ dependency: 'graph' } satisfies Partial<DependencyError>); await expect(client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', true]])); expect(fetch.mock.calls).toHaveLength(4); });
