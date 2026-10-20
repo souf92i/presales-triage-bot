@@ -181,6 +181,17 @@ describe('runTick', () => {
     expect(s.deps.store.waits.get(s.issue.id)).toBeNull(); expect(audits(s).at(-1)?.verdict).toBe('denied');
   });
 
+  it('deletes an expired wait when a requester replies after a human moves the ticket out of Triage', async () => {
+    const s = setup(true); s.outputs.ticketFacts = { ...s.outputs.ticketFacts, slot: { ...s.outputs.ticketFacts.slot!, date: null, isComplete: false } };
+    await runTick(s.deps);
+    s.time('2026-10-28T12:00:00.000Z');
+    await change(s, { stateId: 'done', stateType: 'completed' }, { body: 'Please check' });
+    await runTick(s.deps);
+    expect(s.deps.store.waits.get(s.issue.id)).toBeNull();
+    expect((await s.deps.linear.getIssue(s.issue.id))?.stateId).toBe('done');
+    expect(await botComments(s)).toHaveLength(1);
+  });
+
   it.each(['getIssueWithComments', 'createComment', 'updateIssue'] as const)('continues expiring waits after the first wait fails at %s', async (method) => {
     const s = setup(true); s.outputs.ticketFacts = { ...s.outputs.ticketFacts, slot: { ...s.outputs.ticketFacts.slot!, date: null, isComplete: false } };
     await runTick(s.deps);

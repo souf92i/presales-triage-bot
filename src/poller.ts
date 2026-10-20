@@ -199,7 +199,8 @@ async function expireWaits(deps: PollerDeps): Promise<void> {
       const ticket = await deps.linear.getIssueWithComments(wait.issueId);
       if (ticket === null) { deps.store.waits.delete(wait.issueId); continue; }
       const input = ticketInput(ticket, deps.workspace.users, deps.botUserId);
-      if (input.inputHash !== record.inputHash) continue;
+      if (input.inputHash !== record.inputHash && ticket.issue.stateType === 'triage'
+        && !ticket.issue.labels.some(({ name }) => name.toLowerCase() === deps.config.overrideLabel.toLowerCase())) continue;
       const result = await expireWait({ ...ticket, language: record.language }, deps);
       if (!result.skipped) {
         deps.store.tickets.upsert({
