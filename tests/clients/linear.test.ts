@@ -41,12 +41,18 @@ describe('Linear client', () => {
   it('throws DependencyError when the retry also fails', async () => {
     const fetch = linearFetch(oauthToken(), new Response(null, { status: 401 }), oauthToken(), new Response(null, { status: 401 }));
     await expect(client(fetch).client.getViewerId()).rejects.toMatchObject({ dependency: 'linear' } satisfies Partial<DependencyError>);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
   it('maps triage issues with their comments across two pages', async () => {
     const fetch = linearFetch(oauthToken(), data({ issues: { nodes: [{ ...issue('i1'), comments: { nodes: [comment('c1', { user: { id: 'u', name: 'Ada' } })] } }], pageInfo: { hasNextPage: true, endCursor: 'next' } } }), data({ issues: { nodes: [{ ...issue('i2'), comments: { nodes: [] } }], pageInfo: { hasNextPage: false, endCursor: null } } }));
     await expect(client(fetch).client.listTriageIssues('PRE')).resolves.toEqual([{ issue: expect.objectContaining({ id: 'i1' }), comments: [expect.objectContaining({ id: 'c1', authorId: 'u', authorName: 'Ada' })] }, { issue: expect.objectContaining({ id: 'i2' }), comments: [] }]);
     expect(JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)).variables).toEqual({ teamKey: 'PRE', after: 'next' });
+  });
+
+  it('maps a null issue description to an empty string', async () => {
+    const fetch = linearFetch(oauthToken(), data({ issue: issue('i', { description: null }) }));
+    await expect(client(fetch).client.getIssue('i')).resolves.toMatchObject({ description: '' });
   });
 
   it('uses the epoch and includeArchived for a backfill', async () => {
@@ -84,6 +90,12 @@ describe('Linear client', () => {
 
   it('wraps GraphQL errors in DependencyError and returns null for a missing issue', async () => {
     await expect(client(linearFetch(oauthToken(), json({ errors: [{ message: 'bad request' }] }))).client.getViewerId()).rejects.toMatchObject({ dependency: 'linear' } satisfies Partial<DependencyError>);
-    await expect(client(linearFetch(oauthToken(), data({ issue: null }))).client.getIssue('missing')).resolves.toBeNull();
+    const missing = () => json({ data: null, errors: [{ message: 'Entity not found: Issue', extensions: { type: 'invalid input' } }] });
+    await expect(client(linearFetch(oauthToken(), missing())).client.getIssue('missing')).resolves.toBeNull();
+    await expect(client(linearFetch(oauthToken(), missing())).client.getIssueWithComments('missing')).resolves.toBeNull();
+  });
+
+  it('rejects mutations with success false', async () => {
+    await expect(client(linearFetch(oauthToken(), data({ issueUpdate: { success: false } }))).client.updateIssue('i', {})).rejects.toMatchObject({ dependency: 'linear' } satisfies Partial<DependencyError>);
   });
 });
