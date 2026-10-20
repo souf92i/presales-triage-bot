@@ -184,10 +184,10 @@ The dry run uses live data and writes nothing to Linear.
 Good output:
 
 - The command prints one result per ticket identifier, with the verdict the bot would give: `accepted`, `waiting`, `denied` or `manual`.
-- An identifier that is unknown, or not in Triage, prints `not found`.
+- An unknown identifier prints `not found`. A ticket outside Triage, or with `triage-override`, prints `skipped`.
 - The command ends with exit code 0.
 
-A `pending_retry` or `handoff` verdict means the bot could not read a service. Fix that service before you continue. If the command stops at once with an error, see section 10.
+A `pending_retry` verdict means the bot could not read a service. Fix that service before you continue. If the command stops at once with an error, see section 10.
 
 ## 7. Start in shadow mode
 

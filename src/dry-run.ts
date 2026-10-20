@@ -1,5 +1,4 @@
 import { renderOutcomeBody } from './actions.js';
-import { renderHandoffComment } from './comments/render.js';
 import { readOnlyLinear } from './clients/read-only-linear.js';
 import { createGraphClient } from './clients/graph.js';
 import { createLinearClient } from './clients/linear.js';
@@ -10,7 +9,7 @@ import { loadConfig, loadEnv, managedLabels } from './config.js';
 import { ConfigError, DependencyError } from './errors.js';
 import { evaluateTicket } from './evaluate.js';
 import { createLogger } from './log.js';
-import { refreshIndex } from './poller.js';
+import { refreshIndex, type PollerDeps } from './poller.js';
 import { openStore } from './store/store.js';
 import { ticketInput } from './triggers.js';
 
@@ -38,26 +37,17 @@ function printTicket(ticket: IssueWithComments, outcome: Awaited<ReturnType<type
 function printDependency(ticket: IssueWithComments, error: DependencyError): void {
   print(ticket.issue.identifier);
   print(`title: ${ticket.issue.title}`);
-  print('verdict: handoff');
-  print(`dependency: ${error.dependency}: ${error.message}`);
-  print(`comment: ${renderHandoffComment()}`);
+  print('verdict: pending_retry');
+  print(`comment: pending_retry: ${error.dependency}: ${error.message}`);
 }
 
-async function evaluateTickets(tickets: readonly (IssueWithComments | string)[], deps: {
-  readonly linear: ReturnType<typeof readOnlyLinear>;
-  readonly workspace: Awaited<ReturnType<ReturnType<typeof readOnlyLinear>['resolveWorkspace']>>;
-  readonly botUserId: string;
-  readonly config: ReturnType<typeof loadConfig>;
-  readonly twenty: ReturnType<typeof createTwentyClient>;
-  readonly graph: ReturnType<typeof createGraphClient>;
-  readonly llm: ReturnType<typeof createLlmClient>;
-  readonly store: ReturnType<typeof openStore>;
-  readonly clock: () => Date;
-  readonly random: () => number;
-  readonly log: ReturnType<typeof createLogger>;
-}): Promise<void> {
+async function evaluateTickets(tickets: readonly (IssueWithComments | string)[], deps: PollerDeps): Promise<void> {
   for (const ticket of tickets) {
     if (typeof ticket === 'string') { print(`${ticket}\nnot found`); continue; }
+    if (ticket.issue.stateType !== 'triage') { print(`${ticket.issue.identifier}\nskipped: not in Triage`); continue; }
+    if (ticket.issue.labels.some(({ name }) => name.toLowerCase() === deps.config.overrideLabel.toLowerCase())) {
+      print(`${ticket.issue.identifier}\nskipped: override label`); continue;
+    }
     try {
       const input = ticketInput(ticket, deps.workspace.users, deps.botUserId);
       printTicket(ticket, await evaluateTicket({ issue: ticket.issue, ...input, lastAskKeys: [] }, { ...deps, history: deps.store.index }));
@@ -83,11 +73,12 @@ async function run(): Promise<void> {
     const llm = createLlmClient({ parse: sdkParse(env.ANTHROPIC_API_KEY), model: config.llmModel, effort: config.llmEffort });
     const botUserId = await linear.getViewerId();
     const workspace = await linear.resolveWorkspace(config.teamKey, [...managedLabels(config), config.overrideLabel], config.triageOwnerEmail);
-    const deps = { config, linear, twenty, graph, llm, store, workspace, botUserId, clock, random: Math.random, log };
+    const deps: PollerDeps = { config, linear, twenty, graph, llm, store, workspace, botUserId, clock, random: Math.random, log };
     await refreshIndex(deps);
-    const triage = await linear.listTriageIssues(config.teamKey);
     const requested = process.argv.slice(2);
-    const tickets = requested.length === 0 ? triage : requested.map((identifier) => triage.find(({ issue }) => issue.identifier === identifier) ?? identifier);
+    const tickets = requested.length === 0
+      ? await linear.listTriageIssues(config.teamKey)
+      : await Promise.all(requested.map((identifier) => linear.getIssueWithComments(identifier).then((ticket) => ticket ?? identifier)));
     await evaluateTickets(tickets, deps);
   } finally {
     store.close();
