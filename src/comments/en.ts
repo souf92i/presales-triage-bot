@@ -17,7 +17,7 @@ const qualification = {
 
 function itemLine(item: Extract<Deny, { key: 'qualification.missing' }>['items'][number]): string {
   const [label, fix] = qualification[item.id];
-  return item.status === 'declared_unobtainable' ? `${label} (declared unobtainable): ${fix}` : `${label} is missing: ${fix}`;
+  return item.status === 'declared_unobtainable' ? `${label}: declared unobtainable, ${fix}` : `${label}: missing, ${fix}`;
 }
 
 function deny(denyValue: Deny): DenyText {
@@ -26,12 +26,12 @@ function deny(denyValue: Deny): DenyText {
     case 'crm_link.invalid': return { policy: 'each ask needs a link to its Twenty opportunity.', items: [denyValue.raw === '' ? 'No link was given.' : `The link given ("${truncate(denyValue.raw)}") is not a Twenty opportunity link.`, `Edit the ticket description and paste the opportunity URL in this shape: ${OPPORTUNITY_URL_SHAPE}`, ...(denyValue.partnerOnly ? [`For a partner-only ask, a company link is also accepted: ${COMPANY_URL_SHAPE}`] : [])] };
     case 'crm_link.not_found': return { policy: 'each ask needs a link to an existing Twenty record.', items: [`No Twenty ${denyValue.recordKind} with id ${denyValue.id} exists. Check the link in the ticket description.`] };
     case 'notes_exist.none': return { policy: 'the opportunity needs at least one qualification note.', items: [`Twenty has no note on the opportunity and no note on its company from the last ${denyValue.maxAgeMonths} months. Add a note on the opportunity in Twenty.`] };
-    case 'qualification.missing': return { policy: `a new business opportunity needs a known volume and decision maker, and at most ${denyValue.maxUnknown} other unknown qualification items.`, items: [...denyValue.items.map(itemLine), ...(denyValue.dataQualityMissing === '' ? [] : [`Twenty data quality check: ${denyValue.dataQualityMissing}`])] };
+    case 'qualification.missing': return { policy: `a new business opportunity needs a known volume and decision maker, and at most ${denyValue.maxUnknown} other unknown qualification items.`, items: [...denyValue.items.map(itemLine), ...(denyValue.dataQualityMissing === '' ? [] : [`Twenty data quality check: ${denyValue.dataQualityMissing}. Complete these fields in Twenty.`])] };
     case 'volume_floor.below_min': return { policy: `new business deals under ${denyValue.min} certificates are handled by partners.`, items: [`The volume recorded is ${denyValue.max} certificates. If this is wrong, correct it in a Twenty note on the opportunity.`] };
     case 'discovery_first.missing': return { policy: `${kindNames[denyValue.kind]} requests for a new business deal need a technical discovery first.`, items: [`No completed technical discovery for this customer in the last ${denyValue.maxAgeMonths} months, and no Twenty note says one took place. If one took place, add a Twenty note that says so.`, ...(denyValue.kind === 'demo' ? ['Please create a Technical discovery ask instead.'] : [])] };
     case 'slot.rep_declined_move': return { policy: 'a meeting needs an available presales engineer.', items: ['Nobody is available on the requested slot and the date cannot move.'] };
     case 'slot.no_slot': return { policy: 'a meeting request needs a target date and time.', items: ['The ticket gives no slot and does not say that slots were offered to the customer. Reply in this thread with the date, start time and end time.'] };
-    case 'poc_volume.below_min': return { policy: `a PoC needs a volume of at least ${denyValue.min} certificates.`, items: [`The volume recorded is ${denyValue.max} certificates.`] };
+    case 'poc_volume.below_min': return { policy: `a PoC needs a volume of at least ${denyValue.min} certificates.`, items: [`The volume recorded is ${denyValue.max} certificates. If this is wrong, correct it in a Twenty note on the opportunity.`] };
     case 'poc_paid.no_quote': return { policy: 'PoCs are paid unless an approver agreed otherwise.', items: ['No Twenty quote with a PoC line is linked to the opportunity. Link the PoC quote to the opportunity in Twenty.', 'If an approver agreed to a free PoC, add a Twenty note that quotes the agreement and names the approver.'] };
     case 'wait.no_answer': return { policy: 'questions must be answered within the waiting period.', items: ['No answer from the requester was received.'] };
     default: return assertNever(denyValue);
@@ -58,7 +58,11 @@ function annotation(annotationValue: Annotation): string {
     case 'slot.onsite': return 'On site meeting: travel was not checked. The triage owner picks the presales engineer.';
     case 'slot.free_members': return `Available on the slot: ${annotationValue.members.join(', ')}.`;
     case 'slot.check_later': return 'Slots were offered to the customer. Availability will be checked once a date is known.';
-    case 'owner.active': return `This customer is followed by ${annotationValue.owner} (see ${annotationValue.ticket}), please assign accordingly.${annotationValue.freeOnSlot === null ? '' : ` ${annotationValue.owner} is${annotationValue.freeOnSlot ? '' : ' not'} available on the slot.`}`;
+    case 'owner.active': {
+      if (annotationValue.freeOnSlot === true) return `This customer is followed by ${annotationValue.owner} (see ${annotationValue.ticket}), please assign accordingly. ${annotationValue.owner} is available on the slot.`;
+      if (annotationValue.freeOnSlot === false) return `This customer is followed by ${annotationValue.owner} (see ${annotationValue.ticket}), please assign accordingly. ${annotationValue.owner} is not available on the slot.`;
+      return `This customer is followed by ${annotationValue.owner} (see ${annotationValue.ticket}), please assign accordingly.`;
+    }
     case 'owner.away': return `${annotationValue.owner} followed this customer (see ${annotationValue.ticket}) and is currently away; the triage owner decides.`;
     case 'partner.caution': return `No partner is recorded for this deal in Twenty, in the notes or in the ask.${annotationValue.indirect ? ' The deal is marked as indirect, but no partner is named.' : ''}`;
     case 'poc.go_nogo': return 'This ticket was not disqualified; you can run the PoC Go/NoGo gate.';

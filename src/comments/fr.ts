@@ -13,7 +13,7 @@ const qualification = {
 
 function itemLine(item: Extract<Deny, { key: 'qualification.missing' }>['items'][number]): string {
   const [label, fix] = qualification[item.id];
-  return item.status === 'declared_unobtainable' ? `${label} (déclaré impossible à obtenir) : ${fix}` : `${label} manquant : ${fix}`;
+  return item.status === 'declared_unobtainable' ? `${label} : information déclarée impossible à obtenir, ${fix}` : `${label} : information manquante, ${fix}`;
 }
 
 function deny(denyValue: Deny): DenyText {
@@ -22,12 +22,12 @@ function deny(denyValue: Deny): DenyText {
     case 'crm_link.invalid': return { policy: 'chaque demande doit contenir le lien vers son opportunité Twenty.', items: [denyValue.raw === '' ? "Aucun lien n'est fourni." : `Le lien fourni (« ${truncate(denyValue.raw)} ») n'est pas un lien d'opportunité Twenty.`, `Modifiez la description du ticket et collez l'URL de l'opportunité sous cette forme : ${OPPORTUNITY_URL_SHAPE}`, ...(denyValue.partnerOnly ? [`Pour une demande partenaire seul, un lien de société est aussi accepté : ${COMPANY_URL_SHAPE}`] : [])] };
     case 'crm_link.not_found': return { policy: 'chaque demande doit pointer vers un enregistrement Twenty existant.', items: [`Aucune ${denyValue.recordKind === 'opportunity' ? 'opportunité' : 'société'} Twenty avec l'identifiant ${denyValue.id} n'existe. Vérifiez le lien dans la description du ticket.`] };
     case 'notes_exist.none': return { policy: "l'opportunité doit avoir au moins une note de qualification.", items: [`Twenty ne contient aucune note sur l'opportunité ni aucune note sur sa société datant des ${denyValue.maxAgeMonths} derniers mois. Ajoutez une note sur l'opportunité dans Twenty.`] };
-    case 'qualification.missing': return { policy: `une opportunité new business doit avoir un volume et un décisionnaire connus, et au plus ${denyValue.maxUnknown} autres éléments de qualification inconnus.`, items: [...denyValue.items.map(itemLine), ...(denyValue.dataQualityMissing === '' ? [] : [`Contrôle qualité Twenty : ${denyValue.dataQualityMissing}`])] };
+    case 'qualification.missing': return { policy: `une opportunité new business doit avoir un volume et un décisionnaire connus, et au plus ${denyValue.maxUnknown} autres éléments de qualification inconnus.`, items: [...denyValue.items.map(itemLine), ...(denyValue.dataQualityMissing === '' ? [] : [`Contrôle qualité Twenty : ${denyValue.dataQualityMissing}. Complétez ces champs dans Twenty.`])] };
     case 'volume_floor.below_min': return { policy: `les affaires new business de moins de ${denyValue.min} certificats sont traitées par les partenaires.`, items: [`Le volume indiqué est de ${denyValue.max} certificats. S'il est faux, corrigez-le dans une note Twenty sur l'opportunité.`] };
     case 'discovery_first.missing': return { policy: `les demandes de type ${kindNames[denyValue.kind]} pour une affaire new business nécessitent d'abord une découverte technique.`, items: [`Aucune découverte technique terminée pour ce client dans les ${denyValue.maxAgeMonths} derniers mois, et aucune note Twenty n'en mentionne. Si elle a eu lieu, ajoutez une note Twenty qui l'indique.`, ...(denyValue.kind === 'demo' ? ['Merci de créer plutôt une demande de découverte technique.'] : [])] };
     case 'slot.rep_declined_move': return { policy: 'une réunion nécessite un ingénieur avant-vente disponible.', items: ["Personne n'est disponible sur le créneau demandé et la date ne peut pas être déplacée."] };
     case 'slot.no_slot': return { policy: 'une demande de réunion doit indiquer une date et un horaire.', items: ["Le ticket ne donne aucun créneau et n'indique pas que des créneaux ont été proposés au client. Répondez dans ce fil avec la date, l'heure de début et l'heure de fin."] };
-    case 'poc_volume.below_min': return { policy: `un PoC nécessite un volume d'au moins ${denyValue.min} certificats.`, items: [`Le volume indiqué est de ${denyValue.max} certificats.`] };
+    case 'poc_volume.below_min': return { policy: `un PoC nécessite un volume d'au moins ${denyValue.min} certificats.`, items: [`Le volume indiqué est de ${denyValue.max} certificats. S'il est faux, corrigez-le dans une note Twenty sur l'opportunité.`] };
     case 'poc_paid.no_quote': return { policy: "les PoC sont payants sauf accord d'un approbateur.", items: ["Aucun devis Twenty avec une ligne PoC n'est lié à l'opportunité. Liez le devis du PoC à l'opportunité dans Twenty.", "Si un approbateur a accepté un PoC gratuit, ajoutez une note Twenty qui cite l'accord et nomme l'approbateur."] };
     case 'wait.no_answer': return { policy: "les questions doivent recevoir une réponse dans le délai d'attente.", items: ["Aucune réponse du demandeur n'a été reçue."] };
     default: return assertNever(denyValue);
@@ -54,7 +54,11 @@ function annotation(annotationValue: Annotation): string {
     case 'slot.onsite': return "Réunion sur site : les déplacements n'ont pas été vérifiés. Le responsable du triage choisit l'ingénieur avant-vente.";
     case 'slot.free_members': return `Disponibles sur le créneau : ${annotationValue.members.join(', ')}.`;
     case 'slot.check_later': return 'Des créneaux ont été proposés au client. Les disponibilités seront vérifiées une fois la date connue.';
-    case 'owner.active': return `Ce client est suivi par ${annotationValue.owner} (voir ${annotationValue.ticket}), merci d'assigner en conséquence.${annotationValue.freeOnSlot === null ? '' : ` ${annotationValue.owner} est${annotationValue.freeOnSlot ? '' : ' non'} disponible sur le créneau.`}`;
+    case 'owner.active': {
+      if (annotationValue.freeOnSlot === true) return `Ce client est suivi par ${annotationValue.owner} (voir ${annotationValue.ticket}), merci d'assigner en conséquence. ${annotationValue.owner} est disponible sur le créneau.`;
+      if (annotationValue.freeOnSlot === false) return `Ce client est suivi par ${annotationValue.owner} (voir ${annotationValue.ticket}), merci d'assigner en conséquence. ${annotationValue.owner} n'est pas disponible sur le créneau.`;
+      return `Ce client est suivi par ${annotationValue.owner} (voir ${annotationValue.ticket}), merci d'assigner en conséquence.`;
+    }
     case 'owner.away': return `${annotationValue.owner} a suivi ce client (voir ${annotationValue.ticket}) et est actuellement absent ; le responsable du triage décide.`;
     case 'partner.caution': return `Aucun partenaire n'est enregistré pour cette affaire dans Twenty, dans les notes ou dans la demande.${annotationValue.indirect ? " L'affaire est indiquée comme indirecte, mais aucun partenaire n'est nommé." : ''}`;
     case 'poc.go_nogo': return "Ce ticket n'a pas été disqualifié ; vous pouvez lancer l'étape Go/NoGo du PoC.";
