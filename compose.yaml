@@ -1,0 +1,16 @@
+services:
+  presales-triage:
+    build: .
+    image: linear-presales-triage:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./config.json:/app/config/config.json:ro
+      - triage-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  triage-data:

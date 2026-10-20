@@ -1,0 +1,7 @@
+{
+  "teamKey": "PRE", "triageOwnerEmail": "ela@evertrust.fr",
+  "pool": [{ "email": "sbo@evertrust.fr", "active": true }, { "email": "vdo@evertrust.fr", "active": true }, { "email": "mob@evertrust.fr", "active": false }, { "email": "ela@evertrust.fr", "active": true }],
+  "approvers": ["Etienne", "Mohamed", "Soufiane", "Vincent"], "minDealVolume": 200, "minPocVolume": 500, "maxUnknownItems": 2, "waitDays": 7, "handoffHours": 2, "shortNoticeWorkingDays": 2, "noteMaxAgeMonths": 12, "discoveryMaxAgeMonths": 12, "pollSeconds": 120, "defaultTimezone": "Europe/Paris", "enforce": false, "overrideLabel": "triage-override",
+  "requestTypes": [{ "formValue": "Product demonstration", "kind": "demo", "label": "demo" }, { "formValue": "Technical Workshop", "kind": "technical_discovery", "label": "technical discovery" }, { "formValue": "Technical discovery", "kind": "technical_discovery", "label": "technical discovery" }, { "formValue": "PoC", "kind": "poc", "label": "poc" }, { "formValue": "RFx response (RFI/RFP)", "kind": "rfx", "label": "rfi rfp" }, { "formValue": "Technical questionnaire", "kind": "rfx", "label": "rfi rfp" }],
+  "pocProducts": [], "pocQuoteLinePattern": "\\bpoc\\b|proof of concept", "pocQuoteExcludedStatuses": ["EXPIRED", "REJECTED"], "placeholderValues": ["TBD", "?", "-", "n/a", "xxx", "à définir", "unknown", ""], "llmModel": "claude-sonnet-5-5", "llmEffort": "medium", "rules": ["single-request", "crm-link", "notes-exist", "qualification", "volume-floor", "discovery-first", "slot", "poc-volume", "poc-paid"]
+}

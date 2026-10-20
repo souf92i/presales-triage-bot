@@ -1,0 +1,11 @@
+node_modules
+dist
+data
+.env
+.git
+.scratch
+.superpowers
+docs/adr
+coverage
+tests
+fixtures
