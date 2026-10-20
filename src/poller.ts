@@ -46,7 +46,7 @@ async function indexIssue(issue: LinearIssue, deps: PollerDeps): Promise<void> {
   });
 }
 
-async function refreshIndex(deps: PollerDeps): Promise<void> {
+export async function refreshIndex(deps: PollerDeps): Promise<void> {
   const cursor = deps.store.cursors.get('index_updated_at');
   const issues = await deps.linear.listIssuesUpdatedSince(deps.config.teamKey, cursor);
   let latest = cursor;

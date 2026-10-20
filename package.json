@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "start": "node dist/main.js",
-    "replay": "node dist/replay.js"
+    "replay": "node dist/replay.js",
+    "dry-run": "node dist/dry-run.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.136.0",
