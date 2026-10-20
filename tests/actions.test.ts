@@ -29,7 +29,7 @@ const root: LinearComment = {
 function setup(patch: Partial<LinearIssue> = {}, comments: readonly LinearComment[] = [root]) {
   const fresh = { ...issue, ...patch };
   const linear = new MemoryLinear({ issues: [{ issue: fresh, comments }], viewerId: 'bot', workspace }, clock);
-  const deps: ActionDeps = { linear, workspace, config: defaultConfig(), clock };
+  const deps: ActionDeps = { linear, workspace, config: defaultConfig(), clock, botUserId: 'bot' };
   return { linear, deps, args: { issue, comments, mode: 'enforce' as const, startedFrom: 'triage' as const } };
 }
 
@@ -190,6 +190,53 @@ describe('actions', () => {
     linear.failNext('createComment', new Error('write failed'));
     await expect(applyOutcome({ ...args, outcome: evaluated('denied') }, deps)).rejects.toThrow('write failed');
     expect(linear.calls.some(({ method }) => method === 'updateIssue')).toBe(false);
+  });
+
+  it.each(['verdict', 'expiry'] as const)('retries a failed %s state update without posting an identical comment', async (action) => {
+    const { linear, deps, args } = setup();
+    linear.failNext('updateIssue', new Error('state write failed'));
+    await expect(action === 'verdict'
+      ? applyOutcome({ ...args, outcome: evaluated('denied') }, deps)
+      : expireWait({ ...args, language: 'en' }, deps)).rejects.toThrow('state write failed');
+    const ticket = (await linear.getIssueWithComments(issue.id))!;
+    const result = action === 'verdict'
+      ? await applyOutcome({ ...args, ...ticket, outcome: evaluated('denied') }, deps)
+      : await expireWait({ ...ticket, language: 'en' }, deps);
+    expect(linear.calls.filter(({ method }) => method === 'createComment')).toHaveLength(1);
+    expect(linear.calls.filter(({ method }) => method === 'updateIssue')).toHaveLength(2);
+    expect(result).toMatchObject({ skipped: false, actions: ['comment:skipped-duplicate', 'state:canceled'] });
+    expect((await linear.getIssue(issue.id))?.stateId).toBe('canceled');
+  });
+
+  it.each(['shadow', 'enforce'] as const)('skips an identical handoff comment on retry in %s', async (mode) => {
+    const { linear, deps, args } = setup();
+    await postHandoff({ ...args, mode }, deps);
+    const ticket = (await linear.getIssueWithComments(issue.id))!;
+    const result = await postHandoff({ ...args, ...ticket, mode }, deps);
+    expect(result).toMatchObject({ skipped: false, actions: ['comment:skipped-duplicate'] });
+    expect(linear.calls.filter(({ method }) => method === 'createComment')).toHaveLength(1);
+  });
+
+  it.each(['shadow', 'enforce'] as const)('skips only the latest identical bot verdict until a newer requester reply in %s', async (mode) => {
+    const requester = { id: 'user', email: 'user@example.com', name: 'User', displayName: 'User' };
+    const initial = setup({ attachmentTitles: ['Ask from User'] });
+    const deps = { ...initial.deps, workspace: { ...workspace, users: [requester] } };
+    await applyOutcome({ ...initial.args, mode, outcome: manual }, deps);
+    const ticket = (await initial.linear.getIssueWithComments(issue.id))!;
+    const body = ticket.comments.at(-1)!.body;
+    for (const [extra, duplicate] of [
+      [[], true],
+      [[{ ...root, id: 'other', authorId: 'someone', createdAt: '2026-10-20T12:01:00.000Z' }], true],
+      [[{ ...root, id: 'answer', createdAt: '2026-10-20T12:01:00.000Z' }], false],
+      [[{ ...root, id: 'slack-answer', authorId: null, createdAt: '2026-10-20T12:01:00.000Z' }], false],
+      [[{ ...root, id: 'different-bot', authorId: 'bot', body: `${body} `, createdAt: '2026-10-20T12:01:00.000Z' }], false],
+    ] as const) {
+      const comments = [...ticket.comments, ...extra].toReversed();
+      const linear = new MemoryLinear({ issues: [{ issue: ticket.issue, comments }], viewerId: 'bot', workspace }, clock);
+      const result = await applyOutcome({ ...initial.args, issue: ticket.issue, comments, mode, outcome: manual }, { ...deps, linear });
+      expect(result.actions).toEqual([duplicate ? 'comment:skipped-duplicate' : 'comment:memory-comment-2']);
+      expect(linear.calls.filter(({ method }) => method === 'createComment')).toHaveLength(duplicate ? 0 : 1);
+    }
   });
 });
 

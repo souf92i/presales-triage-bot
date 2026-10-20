@@ -64,6 +64,22 @@ async function botComments(s: Setup) {
 }
 
 describe('runTick', () => {
+  it('retries instead of evaluating stale history when a later index refresh fails', async () => {
+    const s = setup(true); await change(s, { stateId: 'done', stateType: 'completed' });
+    await runTick(s.deps); expect(s.deps.store.index.isBackfillComplete()).toBe(true);
+    s.time('2026-10-20T12:02:00.000Z'); await change(s, { stateId: 'triage', stateType: 'triage' });
+    s.deps.linear.failNext('listIssuesUpdatedSince', new DependencyError('linear', 'index offline'));
+    s.deps.twenty.calls.length = 0;
+    await runTick(s.deps);
+    expect(record(s)).toMatchObject({ status: 'pending_retry', firstFailureAt: '2026-10-20T12:02:00.000Z', lastError: 'index offline' });
+    expect(await botComments(s)).toEqual([]); expect(s.deps.twenty.calls).toEqual([]);
+    expect(s.deps.llm.inputs.ticket).toEqual([]);
+    s.time('2026-10-20T14:02:00.000Z');
+    s.deps.linear.failNext('listIssuesUpdatedSince', new DependencyError('linear', 'index offline'));
+    await runTick(s.deps);
+    expect(record(s)?.status).toBe('handed_off'); expect(await botComments(s)).toHaveLength(1);
+  });
+
   it('evaluates a new triage ticket in shadow mode and records an audit row with hash and model', async () => {
     const s = setup(); await runTick(s.deps);
     expect(record(s)).toMatchObject({ status: 'accepted', mode: 'shadow', startedFrom: 'triage', firstFailureAt: null, lastError: null, lastEvaluatedAt: NOW });
@@ -131,6 +147,22 @@ describe('runTick', () => {
     expect(s.deps.linear.calls.some(({ method }) => method === 'listCommentsCreatedSince')).toBe(false);
   });
 
+  it('keeps the recheck cursor when fetching an issue fails and picks it up next tick', async () => {
+    const s = setup(true); await change(s, { description: s.issue.description.replaceAll(OPP_ID, 'invalid') });
+    await runTick(s.deps); expect(record(s)?.status).toBe('denied');
+    const cursor = s.deps.store.cursors.get('comments_created_at');
+    s.time('2026-10-20T12:04:00.000Z');
+    await change(s, { description: s.issue.description }, { body: 'recheck please' });
+    s.deps.linear.failNext('getIssueWithComments', new DependencyError('linear', 'fetch offline'));
+    await runTick(s.deps);
+    expect(s.deps.store.cursors.get('comments_created_at')).toBe(cursor);
+    expect(record(s)?.status).toBe('denied'); expect(audits(s)).toHaveLength(1);
+    await runTick(s.deps);
+    expect(record(s)?.status).toBe('accepted');
+    expect(s.deps.store.cursors.get('comments_created_at')).toBe('2026-10-20T12:04:00.000Z');
+    expect((await s.deps.linear.getIssue(s.issue.id))?.stateId).toBe('triage');
+  });
+
   it('keeps the first wait expiry across later questions', async () => {
     const s = setup(true); s.outputs.ticketFacts = { ...s.outputs.ticketFacts, slot: { ...s.outputs.ticketFacts.slot!, date: null, isComplete: false } }; await runTick(s.deps);
     expect(record(s)?.status).toBe('waiting'); const wait = s.deps.store.waits.get(s.issue.id);
@@ -147,6 +179,28 @@ describe('runTick', () => {
     expect((await s.deps.linear.getIssue(s.issue.id))?.stateId).toBe('canceled');
     expect(record(s)).toMatchObject({ status: 'denied', lastAskKeys: [], commentIds: [] });
     expect(s.deps.store.waits.get(s.issue.id)).toBeNull(); expect(audits(s).at(-1)?.verdict).toBe('denied');
+  });
+
+  it.each(['getIssueWithComments', 'createComment', 'updateIssue'] as const)('continues expiring waits after the first wait fails at %s', async (method) => {
+    const s = setup(true); s.outputs.ticketFacts = { ...s.outputs.ticketFacts, slot: { ...s.outputs.ticketFacts.slot!, date: null, isComplete: false } };
+    await runTick(s.deps);
+    const first = (await s.deps.linear.getIssueWithComments(s.issue.id))!;
+    const second = { ...first.issue, id: 'issue-2', identifier: 'PRE-901', number: 901 };
+    s.deps.linear = new MemoryLinear({ issues: [first, { issue: second, comments: [] }], viewerId: 'bot', workspace }, s.deps.clock);
+    s.deps.store.tickets.upsert({ ...record(s)!, issueId: second.id, identifier: second.identifier });
+    s.deps.store.waits.createIfAbsent(second.id, s.deps.store.waits.get(s.issue.id)!.expiresAt, NOW);
+    const previous = record(s); const wait = s.deps.store.waits.get(s.issue.id);
+    s.time('2026-10-28T12:00:00.000Z');
+    s.deps.linear.failNext(method, new DependencyError('linear', 'expiry offline'));
+    await runTick(s.deps);
+    expect(s.deps.store.tickets.get(second.id)?.status).toBe('denied');
+    expect((await s.deps.linear.getIssue(second.id))?.stateId).toBe('canceled');
+    expect(s.deps.store.waits.get(second.id)).toBeNull();
+    expect(record(s)).toEqual(previous); expect(s.deps.store.waits.get(s.issue.id)).toEqual(wait);
+    expect(audits(s)).toHaveLength(1);
+    expect(s.deps.log).toHaveBeenCalledWith('warn', 'wait_expiry', { dependency: 'linear', error: 'expiry offline' });
+    await runTick(s.deps);
+    expect(record(s)?.status).toBe('denied'); expect(s.deps.store.waits.get(s.issue.id)).toBeNull();
   });
 
   it('does not expire a wait while the ticket is pending_retry', async () => {
@@ -191,7 +245,7 @@ describe('runTick', () => {
     await runTick(s.deps);
     expect(record(s)?.status).toBe('pending_retry'); expect(await botComments(s)).toEqual([]);
     expect(s.deps.store.cursors.get('index_updated_at')).toBeNull(); expect(s.deps.store.index.isBackfillComplete()).toBe(false);
-    expect(audits(s)[0]?.results.some(({ outcome }) => outcome.kind === 'error')).toBe(true);
+    expect(audits(s)[0]).toMatchObject({ results: [], error: 'offline' });
     await runTick(s.deps); expect(record(s)?.status).toBe('accepted');
   });
 
@@ -203,8 +257,6 @@ describe('runTick', () => {
     expect(s.deps.store.index.hasCompletedTicket(COMPANY_ID, 'demo', NOW, 'other')).toBe(true);
     expect(s.deps.twenty.calls).toEqual([]);
     await change(s, { description: 'Not a form' }); await runTick(s.deps);
-    expect(s.deps.store.index.latestWorkedTicket(COMPANY_ID, 'other')).toBeNull();
-    await change(s, { description: s.issue.description.replaceAll(OPP_ID, 'invalid') }); await runTick(s.deps);
     expect(s.deps.store.index.latestWorkedTicket(COMPANY_ID, 'other')).toBeNull();
   });
 
@@ -221,6 +273,25 @@ describe('runTick', () => {
     await change(s, {}, { body: 'Confirmed' }); await runTick(s.deps);
     expect(record(s)?.status).toBe('accepted'); expect(s.deps.store.waits.get(s.issue.id)).toBeNull();
     expect(audits(s).map(({ verdict }) => verdict)).toEqual(['waiting', 'accepted']);
+  });
+
+  it('keeps an expired wait when a requester reply arrives after candidate collection', async () => {
+    const s = setup(true); s.outputs.ticketFacts = { ...s.outputs.ticketFacts, slot: { ...s.outputs.ticketFacts.slot!, date: null, isComplete: false } };
+    await runTick(s.deps); const wait = s.deps.store.waits.get(s.issue.id);
+    s.time('2026-10-28T12:00:00.000Z');
+    const listTriage = s.deps.linear.listTriageIssues.bind(s.deps.linear);
+    vi.spyOn(s.deps.linear, 'listTriageIssues').mockImplementationOnce(async (team) => {
+      const collected = await listTriage(team);
+      await change(s, {}, { body: 'Confirmed' });
+      return collected;
+    });
+    await runTick(s.deps);
+    expect(record(s)?.status).toBe('waiting'); expect(s.deps.store.waits.get(s.issue.id)).toEqual(wait);
+    expect((await s.deps.linear.getIssue(s.issue.id))?.stateId).toBe('triage');
+    expect(await botComments(s)).toHaveLength(1); expect(audits(s)).toHaveLength(1);
+    s.outputs.ticketFacts = { ...s.outputs.ticketFacts, slot: { ...baseFacts().ticketFacts.slot!, date: '2026-11-02', evidence: ev('Meeting at 15h-16h') } };
+    await runTick(s.deps);
+    expect(record(s)?.status).toBe('accepted'); expect(s.deps.store.waits.get(s.issue.id)).toBeNull();
   });
 
   it('audits a skipped action and leaves the previous ticket record unchanged', async () => {
@@ -257,6 +328,15 @@ describe('runTick', () => {
     expect(record(s)).toMatchObject({ status: 'pending_retry', lastError: 'unexpected failure' });
     expect(s.deps.log).toHaveBeenCalledWith('error', 'evaluate', expect.objectContaining({ stack: expect.stringContaining('unexpected failure') }));
     expect(await botComments(s)).toEqual([]);
+  });
+
+  it('logs a rule-level pending_retry at warn without a stack', async () => {
+    const s = setup(); s.deps.store.cursors.set('index_updated_at', NOW);
+    await runTick(s.deps);
+    expect(record(s)?.status).toBe('pending_retry'); expect(await botComments(s)).toEqual([]);
+    expect(audits(s)[0]?.results.some(({ outcome }) => outcome.kind === 'error')).toBe(true);
+    expect(s.deps.log).toHaveBeenCalledWith('warn', 'evaluate', { error: record(s)?.lastError });
+    expect(s.deps.log.mock.calls.some(([level]) => level === 'error')).toBe(false);
   });
 
   it('does not advance the index cursor when resolving a changed issue fails', async () => {

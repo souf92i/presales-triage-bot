@@ -67,14 +67,12 @@ function addCandidate(ticket: IssueWithComments, startedFrom: StartedFrom, candi
   }
 }
 
-async function recheckIds(deps: PollerDeps): Promise<ReadonlySet<string>> {
+async function recheckIds(deps: PollerDeps): Promise<{ issueIds: ReadonlySet<string>; latest: string }> {
   const cursor = deps.store.cursors.get('comments_created_at');
   const issueIds = new Set<string>();
-  if (cursor === null) {
-    deps.store.cursors.set('comments_created_at', deps.clock().toISOString());
-  } else {
+  let latest = cursor ?? deps.clock().toISOString();
+  if (cursor !== null) {
     const comments = await deps.linear.listCommentsCreatedSince(deps.config.teamKey, cursor);
-    let latest = cursor;
     for (const comment of comments) {
       const record = deps.store.tickets.get(comment.issueId);
       if (record?.status === 'denied' || (record?.startedFrom === 'canceled' && ['handed_off', 'pending_retry'].includes(record.status))) {
@@ -82,12 +80,11 @@ async function recheckIds(deps: PollerDeps): Promise<ReadonlySet<string>> {
       }
       if (comment.createdAt > latest) latest = comment.createdAt;
     }
-    deps.store.cursors.set('comments_created_at', latest);
   }
   for (const record of deps.store.tickets.listByStatus(['pending_retry'])) {
     if (record.startedFrom === 'canceled') issueIds.add(record.issueId);
   }
-  return issueIds;
+  return { issueIds, latest };
 }
 
 async function collectCandidates(candidates: Candidate[], mode: Mode, deps: PollerDeps): Promise<void> {
@@ -95,11 +92,13 @@ async function collectCandidates(candidates: Candidate[], mode: Mode, deps: Poll
     addCandidate(ticket, 'triage', candidates, mode, deps);
   }
   if (mode === 'shadow') return;
-  for (const id of await recheckIds(deps)) {
+  const { issueIds, latest } = await recheckIds(deps);
+  for (const id of issueIds) {
     if (candidates.some(({ issue }) => issue.id === id)) continue;
     const ticket = await deps.linear.getIssueWithComments(id);
     if (ticket?.issue.stateId === deps.workspace.canceledStateId) addCandidate(ticket, 'canceled', candidates, mode, deps);
   }
+  deps.store.cursors.set('comments_created_at', latest);
 }
 
 function baseRecord(candidate: Candidate, mode: Mode, deps: PollerDeps): TicketRecord {
@@ -144,12 +143,16 @@ function persistOutcome(candidate: Candidate, mode: Mode, outcome: EvaluationOut
 }
 
 async function failCandidate(candidate: Candidate, mode: Mode, outcome: EvaluationOutcome | null, error: unknown, deps: PollerDeps): Promise<void> {
-  logError(error, 'evaluate', deps);
+  let message = error instanceof Error ? error.message : String(error);
+  if (outcome?.kind === 'evaluated' && outcome.result.verdict === 'pending_retry') {
+    deps.log('warn', 'evaluate', { error: message });
+  } else {
+    logError(error, 'evaluate', deps);
+  }
   const now = deps.clock();
   const firstFailureAt = candidate.record?.firstFailureAt ?? now.toISOString();
   let actions: readonly string[] = [];
   let status: 'pending_retry' | 'handed_off' = 'pending_retry';
-  let message = error instanceof Error ? error.message : String(error);
   if (now.getTime() - new Date(firstFailureAt).getTime() >= deps.config.handoffHours * 60 * 60 * 1000) {
     try {
       const result = await postHandoff({ ...candidate, mode }, deps);
@@ -190,32 +193,40 @@ async function evaluateCandidate(candidate: Candidate, mode: Mode, deps: PollerD
 
 async function expireWaits(deps: PollerDeps): Promise<void> {
   for (const wait of deps.store.waits.listExpired(deps.clock().toISOString())) {
-    const record = deps.store.tickets.get(wait.issueId);
-    if (record?.status !== 'waiting') continue;
-    const ticket = await deps.linear.getIssueWithComments(wait.issueId);
-    if (ticket === null) { deps.store.waits.delete(wait.issueId); continue; }
-    const result = await expireWait({ ...ticket, language: record.language }, deps);
-    if (!result.skipped) {
+    try {
+      const record = deps.store.tickets.get(wait.issueId);
+      if (record?.status !== 'waiting') continue;
+      const ticket = await deps.linear.getIssueWithComments(wait.issueId);
+      if (ticket === null) { deps.store.waits.delete(wait.issueId); continue; }
       const input = ticketInput(ticket, deps.workspace.users, deps.botUserId);
-      deps.store.tickets.upsert({
-        ...record, status: 'denied', lastAskKeys: [], inputHash: input.inputHash,
-        commentIds: input.requesterComments.map(({ id }) => id), updatedAt: deps.clock().toISOString(),
-      });
-      audit({ ...ticket, ...input, record, startedFrom: record.startedFrom }, 'enforce', null,
-        { verdict: 'denied', actions: result.actions, error: null }, deps);
-    }
-    deps.store.waits.delete(wait.issueId);
+      if (input.inputHash !== record.inputHash) continue;
+      const result = await expireWait({ ...ticket, language: record.language }, deps);
+      if (!result.skipped) {
+        deps.store.tickets.upsert({
+          ...record, status: 'denied', lastAskKeys: [], inputHash: input.inputHash,
+          commentIds: input.requesterComments.map(({ id }) => id), updatedAt: deps.clock().toISOString(),
+        });
+        audit({ ...ticket, ...input, record, startedFrom: record.startedFrom }, 'enforce', null,
+          { verdict: 'denied', actions: result.actions, error: null }, deps);
+      }
+      deps.store.waits.delete(wait.issueId);
+    } catch (error) { logError(error, 'wait_expiry', deps); }
   }
 }
 
 export async function runTick(deps: PollerDeps): Promise<void> {
   const mode = deps.config.enforce ? 'enforce' : 'shadow';
-  try { await refreshIndex(deps); } catch (error) { logError(error, 'index', deps); }
+  let indexFailure: { error: unknown } | null = null;
+  try { await refreshIndex(deps); }
+  catch (error) { indexFailure = { error }; logError(error, 'index', deps); }
   const candidates: Candidate[] = [];
   let collected = false;
   try { await collectCandidates(candidates, mode, deps); collected = true; }
   catch (error) { logError(error, 'collect', deps); }
-  for (const candidate of candidates) await evaluateCandidate(candidate, mode, deps);
+  for (const candidate of candidates) {
+    if (indexFailure !== null) await failCandidate(candidate, mode, null, indexFailure.error, deps);
+    else await evaluateCandidate(candidate, mode, deps);
+  }
   if (mode === 'enforce' && collected) {
     try { await expireWaits(deps); } catch (error) { logError(error, 'wait_expiry', deps); }
   }

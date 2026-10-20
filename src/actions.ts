@@ -1,11 +1,11 @@
 import { hasOwnerAnnotation } from './annotations.js';
-import type { LinearClient, LinearComment, LinearIssue, LinearWorkspace } from './clients/types.js';
+import type { IssueWithComments, LinearClient, LinearComment, LinearIssue, LinearWorkspace } from './clients/types.js';
 import { renderHandoffComment, renderManualComment, renderShadowComment, renderVerdictComment, renderWaitExpiryComment } from './comments/render.js';
 import { managedLabels, templateLanguage, type Config } from './config.js';
 import type { Clock, Mode, SlotWindow } from './domain/types.js';
 import type { EvaluationOutcome } from './evaluate.js';
 import { addDays, endOfDayUtc } from './time.js';
-import { findSyncedThreadRoot } from './triggers.js';
+import { findSyncedThreadRoot, ticketInput } from './triggers.js';
 
 export type StartedFrom = 'triage' | 'canceled';
 export interface ActionDeps {
@@ -13,6 +13,7 @@ export interface ActionDeps {
   readonly workspace: LinearWorkspace;
   readonly config: Config;
   readonly clock: Clock;
+  readonly botUserId: string;
 }
 export interface ActionsResult {
   readonly skipped: boolean;
@@ -83,6 +84,17 @@ function renderOutcomeBody(outcome: EvaluationOutcome): string {
   return renderVerdictComment({ ...outcome.result, verdict }, templateLanguage(outcome.facts.ticketFacts.language));
 }
 
+async function commentAction(ticket: IssueWithComments, body: string, parentId: string | null, deps: ActionDeps): Promise<string> {
+  const comments = ticket.comments.filter(({ issueId }) => issueId === ticket.issue.id);
+  const latest = comments.filter(({ authorId }) => authorId === deps.botUserId)
+    .toSorted((left, right) => left.createdAt.localeCompare(right.createdAt)).at(-1);
+  const { requesterComments } = ticketInput({ ...ticket, comments }, deps.workspace.users, deps.botUserId);
+  if (latest?.body === body && !requesterComments.some(({ createdAt }) => createdAt > latest.createdAt)) {
+    return 'comment:skipped-duplicate';
+  }
+  return `comment:${await deps.linear.createComment({ issueId: ticket.issue.id, parentId, body })}`;
+}
+
 export async function applyOutcome(args: { issue: LinearIssue; comments: readonly LinearComment[]; outcome: EvaluationOutcome; mode: Mode; startedFrom: StartedFrom }, deps: ActionDeps): Promise<ActionsResult> {
   const { outcome, mode } = args;
   let body = renderOutcomeBody(outcome);
@@ -95,8 +107,7 @@ export async function applyOutcome(args: { issue: LinearIssue; comments: readonl
     body,
   });
   const parentId = mode === 'shadow' ? null : findSyncedThreadRoot(args.comments)?.id ?? null;
-  const commentId = await deps.linear.createComment({ issueId: issue.id, parentId, body });
-  actions.push(`comment:${commentId}`);
+  actions.push(await commentAction({ issue, comments: args.comments }, body, parentId, deps));
   let waitExpiresAt: string | null = null;
   if (mode === 'enforce' && outcome.kind === 'evaluated') {
     actions.push(...await enforceState(issue, outcome, deps));
@@ -113,18 +124,15 @@ export async function postHandoff(args: { issue: LinearIssue; comments: readonly
   const handoff = renderHandoffComment();
   const body = args.mode === 'shadow' ? renderShadowComment({ verdict: 'pending_retry', results: [], body: handoff }) : handoff;
   const parentId = args.mode === 'shadow' ? null : findSyncedThreadRoot(args.comments)?.id ?? null;
-  const commentId = await deps.linear.createComment({ issueId: issue.id, parentId, body });
-  return { skipped: false, actions: [`comment:${commentId}`], waitExpiresAt: null };
+  const action = await commentAction({ issue, comments: args.comments }, body, parentId, deps);
+  return { skipped: false, actions: [action], waitExpiresAt: null };
 }
 
 export async function expireWait(args: { issue: LinearIssue; comments: readonly LinearComment[]; language: string }, deps: ActionDeps): Promise<ActionsResult> {
   const issue = await preActionCheck(args.issue.id, 'triage', deps);
   if (issue === null) return skipped;
-  const commentId = await deps.linear.createComment({
-    issueId: issue.id,
-    parentId: findSyncedThreadRoot(args.comments)?.id ?? null,
-    body: renderWaitExpiryComment(templateLanguage(args.language)),
-  });
+  const action = await commentAction({ issue, comments: args.comments }, renderWaitExpiryComment(templateLanguage(args.language)),
+    findSyncedThreadRoot(args.comments)?.id ?? null, deps);
   await deps.linear.updateIssue(issue.id, { stateId: deps.workspace.canceledStateId });
-  return { skipped: false, actions: [`comment:${commentId}`, 'state:canceled'], waitExpiresAt: null };
+  return { skipped: false, actions: [action, 'state:canceled'], waitExpiresAt: null };
 }
