@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { parseRequesterName } from './asks-parser.js';
 import type { IssueWithComments, LinearComment, LinearUser } from './clients/types.js';
-import type { Mode, Requester } from './domain/types.js';
+import type { Mode, Requester, Verdict } from './domain/types.js';
 import { normalizeName } from './text.js';
 
 export const SYNCED_THREAD_PREFIX = 'This comment thread is synced';
@@ -67,7 +67,7 @@ export function ticketInput(
   return { requester, requesterComments: comments, inputHash: computeInputHash(ticket.issue.description, comments) };
 }
 
-export type TicketStatus = 'accepted' | 'waiting' | 'denied' | 'manual' | 'pending_retry' | 'handed_off';
+export type TicketStatus = Verdict | 'handed_off';
 
 export interface TriggerState {
   readonly status: TicketStatus;

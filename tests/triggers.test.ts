@@ -81,7 +81,12 @@ describe('triggers', () => {
 
     expect(input.requester).toBeNull();
     expect(input.requesterComments).toEqual([]);
-    expect(input.inputHash).not.toBe(computeInputHash('Changed description', []));
+    expect(input.inputHash).toBe(computeInputHash('Description', []));
+    const changedDescription = ticketInput({
+      ...noRequester,
+      issue: { ...noRequester.issue, description: 'Changed description' },
+    }, users, 'bot-id');
+    expect(changedDescription.inputHash).not.toBe(input.inputHash);
   });
 
   it('hash is stable and changes with a comment edit', () => {
@@ -99,7 +104,7 @@ describe('triggers', () => {
   });
 
   it('shouldEvaluate rejects non-triage tickets that are not bot-canceled', () => {
-    expect(shouldEvaluate({ state: null, mode: 'shadow', inTriage: false, botCanceled: false, inputHash: 'hash', requesterComments: [] })).toBe(false);
+    expect(shouldEvaluate({ state: { status: 'pending_retry', mode: 'shadow', inputHash: null, commentIds: [] }, mode: 'shadow', inTriage: false, botCanceled: false, inputHash: 'hash', requesterComments: [] })).toBe(false);
   });
 
   it('shouldEvaluate evaluates a new triage ticket', () => {
@@ -121,6 +126,7 @@ describe('triggers', () => {
   it('bot-canceled re-evaluates only on a new recheck', () => {
     const state = { status: 'denied' as const, mode: 'shadow' as const, inputHash: 'old', commentIds: ['known'] };
     expect(shouldEvaluate({ state, mode: 'shadow', inTriage: false, botCanceled: true, inputHash: 'new', requesterComments: [comment({ id: 'known', body: 'Recheck' })] })).toBe(false);
+    expect(shouldEvaluate({ state, mode: 'shadow', inTriage: false, botCanceled: true, inputHash: 'new', requesterComments: [comment({ id: 'new', body: 'Thanks' })] })).toBe(false);
     expect(shouldEvaluate({ state, mode: 'shadow', inTriage: false, botCanceled: true, inputHash: 'new', requesterComments: [comment({ id: 'new', body: ' Recheck please' })] })).toBe(true);
   });
 
@@ -129,6 +135,13 @@ describe('triggers', () => {
       state: { status: 'accepted', mode: 'enforce', inputHash: 'old', commentIds: ['comment-1'] },
       mode: 'enforce', inTriage: true, botCanceled: false, inputHash: 'changed-body', requesterComments: [comment()],
     })).toBe(false);
+  });
+
+  it('accepted in enforce evaluates a new comment with the same state', () => {
+    expect(shouldEvaluate({
+      state: { status: 'accepted', mode: 'enforce', inputHash: 'old', commentIds: ['known'] },
+      mode: 'enforce', inTriage: true, botCanceled: false, inputHash: 'new', requesterComments: [comment({ id: 'new', body: 'Thanks' })],
+    })).toBe(true);
   });
 
   it('shouldEvaluate evaluates other changed triage inputs', () => {
