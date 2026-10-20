@@ -5,18 +5,10 @@ import { z } from 'zod';
 import { ConfigError } from './errors.js';
 import { QUOTE_STATUSES, REQUEST_KINDS, type RequestKind, type TemplateLanguage } from './domain/types.js';
 import { RULE_IDS } from './rules/types.js';
+import { isValidTimeZone } from './time.js';
 
 export interface PoolMember { email: string; active: boolean }
 export interface RequestTypeMapping { formValue: string; kind: RequestKind; label: string }
-
-function isValidTimeZone(timezone: string): boolean {
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: timezone });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function isValidPattern(pattern: string): boolean {
   try {
