@@ -19,5 +19,15 @@ describe('qualification merge', () => {
     const input = { ...extraction(), volume: { min: 10, max: 20, unitIsClmManagedCerts: false, unclear: false, evidence: { sourceId: 'ticket', quote: '10-20' } } };
     expect(mergeQualification(opportunity(), input).qualification.items.volume).toMatchObject({ status: 'known', value: '10-20' });
   });
+  it('uses the CLM extraction only when the solution is known', () => {
+    const missingSolution = mergeQualification(opportunity(), { ...extraction(), solutionIncludesClm: false }).qualification;
+    const knownSolution = mergeQualification(opportunity(), { ...extraction(), items: { ...extraction().items, solution: { status: 'known', value: 'PKI', evidence: { sourceId: 'ticket', quote: 'PKI' } } }, solutionIncludesClm: false }).qualification;
+    expect(missingSolution.solutionIncludesClm).toBeNull();
+    expect(knownSolution.solutionIncludesClm).toBe(false);
+  });
+  it('marks a non-CLM certificate unit as unclear', () => {
+    const input = { ...extraction(), volume: { min: 150, max: 150, unitIsClmManagedCerts: false, unclear: false, evidence: { sourceId: 'ticket', quote: '150 holders' } } };
+    expect(mergeQualification(opportunity(), input).qualification.volume).toMatchObject({ unclear: true });
+  });
   it('opportunitySources skips empty fields', () => expect(opportunitySources(opportunity({ besoin: 'Need', decisionnaires: 'Jane' })).map(({ id }) => id)).toEqual(['besoin', 'decisionnaires']));
 });
