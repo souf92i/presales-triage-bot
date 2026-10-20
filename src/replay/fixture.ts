@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
+import { renderOutcomeBody } from '../actions.js';
 import { MemoryGraph, MemoryLlm, MemoryTwenty } from '../clients/memory.js';
 import type { LinearComment, LinearIssue, LinearUser } from '../clients/types.js';
-import { ConfigSchema, templateLanguage, type Config } from '../config.js';
+import { ConfigSchema, type Config } from '../config.js';
 import type { Verdict } from '../domain/types.js';
 import { evaluateTicket } from '../evaluate.js';
-import { renderManualComment, renderVerdictComment } from '../comments/render.js';
 import type { Annotation, AnnotationKey, AskKey, DenyKey, RuleId, RuleOutcome } from '../rules/types.js';
 import { openStore, type IndexEntry } from '../store/store.js';
 import { ticketInput } from '../triggers.js';
@@ -65,8 +65,8 @@ export async function runReplay(fixture: ReplayFixture): Promise<ReplayReport> {
       llm: new MemoryLlm(fixture.llm), history: store.index, clock: () => new Date(fixture.now), random: () => 0,
     });
     const report = outcome.kind === 'manual'
-      ? { verdict: 'manual' as const, rules: [], annotations: [], comment: renderManualComment(outcome.reason) }
-      : { verdict: outcome.result.verdict, rules: outcome.result.results.map(({ ruleId, outcome: ruleOutcome }) => ({ ruleId, outcome: ruleOutcome })), annotations: [...outcome.result.annotations], comment: outcome.result.verdict === 'pending_retry' ? null : renderVerdictComment({ ...outcome.result, verdict: outcome.result.verdict as 'accepted' | 'waiting' | 'denied' }, templateLanguage(outcome.facts.ticketFacts.language)) };
+      ? { verdict: 'manual' as const, rules: [], annotations: [], comment: renderOutcomeBody(outcome) }
+      : { verdict: outcome.result.verdict, rules: outcome.result.results.map(({ ruleId, outcome: ruleOutcome }) => ({ ruleId, outcome: ruleOutcome })), annotations: [...outcome.result.annotations], comment: renderOutcomeBody(outcome) };
     const mismatches = fixture.expected === undefined ? [] : [
       ...(report.verdict === fixture.expected.verdict ? [] : [`verdict differs: expected ${fixture.expected.verdict}, got ${report.verdict}`]),
       ...compareSet('denies', outcome.kind === 'manual' ? [] : outcome.result.denies.map(({ key }) => key), fixture.expected.denies),

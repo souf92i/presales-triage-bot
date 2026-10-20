@@ -8,11 +8,16 @@ import { ConfigError } from './errors.js';
 import { createLogger } from './log.js';
 import { runTick } from './poller.js';
 import { openStore } from './store/store.js';
+import { setTimeout } from 'node:timers/promises';
 
-function stopped(): Promise<void> {
+function stopped(controller: AbortController): Promise<void> {
   return new Promise((resolve) => {
-    process.once('SIGTERM', resolve);
-    process.once('SIGINT', resolve);
+    const stop = () => {
+      controller.abort();
+      resolve();
+    };
+    process.once('SIGTERM', stop);
+    process.once('SIGINT', stop);
   });
 }
 
@@ -42,12 +47,15 @@ async function main(): Promise<void> {
     const botUserId = await linear.getViewerId();
     const workspace = await linear.resolveWorkspace(config.teamKey, [...managedLabels(config), config.overrideLabel], config.triageOwnerEmail);
     log('info', 'started', { mode: config.enforce ? 'enforce' : 'shadow' });
-    const stop = stopped();
+    const controller = new AbortController();
+    const stop = stopped(controller);
     let running = true;
     void stop.then(() => { running = false; });
     while (running) {
       await runTick({ config, linear, twenty, graph, llm, store, workspace, botUserId, clock, random: Math.random, log });
-      if (running) await Promise.race([stop, new Promise((resolve) => setTimeout(resolve, config.pollSeconds * 1000))]);
+      if (running) await setTimeout(config.pollSeconds * 1000, undefined, { signal: controller.signal }).catch((error: unknown) => {
+        if (!controller.signal.aborted) throw error;
+      });
     }
   } catch (error) {
     log('error', 'startup failed', { error: error instanceof Error ? error.message : String(error) });

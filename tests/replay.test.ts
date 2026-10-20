@@ -31,7 +31,10 @@ describe('replay', () => {
     expect(report.mismatches[0]).toContain('verdict');
   });
 
-  it('rejects an invalid fixture', () => {
-    expect(() => ReplayFixtureSchema.parse({})).toThrow();
+  it('rejects an invalid fixture', async () => {
+    const input = await fixture();
+    const { issue: _, ...invalidFixture } = input;
+
+    expect(() => ReplayFixtureSchema.parse(invalidFixture)).toThrow();
   });
 });

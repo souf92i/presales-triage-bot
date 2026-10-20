@@ -1,6 +1,6 @@
 # Linear Presales Triage
 
-This bot reviews Presales tickets in Linear against the agreed triage policy. It gathers CRM, calendar and ticket facts, then posts a clear result when enforce mode is enabled. Shadow mode records the same decision without changing a ticket.
+This bot reviews Presales tickets in Linear against the agreed triage policy. It gathers CRM, calendar and ticket facts, then labels the ticket and posts the result. In enforce mode it also moves, assigns or cancels the ticket. In shadow mode it only applies the label and posts a "Shadow mode" comment, so the team can check its decisions first.
 
 ## Setup
 
@@ -46,7 +46,7 @@ Copy `config.example.json` to `config.json`. Removing a rule id from `rules` dis
 | `overrideLabel` | `triage-override` |
 | `requestTypes` | demo, technical discovery, poc, rfi rfp mappings |
 | `pocProducts` | `[]` |
-| `pocQuoteLinePattern` | `\\bpoc\\b|proof of concept` |
+| `pocQuoteLinePattern` | `\bpoc\b\|proof of concept` |
 | `pocQuoteExcludedStatuses` | `EXPIRED`, `REJECTED` |
 | `placeholderValues` | TBD, ?, -, n/a, xxx, à définir, unknown, empty |
 | `llmModel`, `llmEffort` | `claude-sonnet-5-5`, `medium` |
@@ -62,7 +62,7 @@ Run `npm run build && npm run replay -- fixtures/replay/PRE-304.json`. To replay
 
 ## Dry run
 
-Task 21 adds `npm run build && npm run dry-run`, or `npm run dry-run -- PRE-304 PRE-301`. It reads live data and prints each verdict and comment without writing to Linear or a state file.
+Run `npm run build && npm run dry-run`, or `npm run dry-run -- PRE-304 PRE-301`. It reads live data and prints each verdict and comment without writing to Linear or a state file.
 
 ## Enforce mode
 

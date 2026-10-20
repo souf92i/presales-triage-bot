@@ -77,10 +77,10 @@ async function enforceState(issue: LinearIssue, outcome: Extract<EvaluationOutco
   return actions;
 }
 
-function renderOutcomeBody(outcome: EvaluationOutcome): string {
+export function renderOutcomeBody(outcome: EvaluationOutcome): string | null {
   if (outcome.kind === 'manual') return renderManualComment(outcome.reason);
   const { verdict } = outcome.result;
-  if (verdict === 'pending_retry') throw new Error('applyOutcome called with pending_retry');
+  if (verdict === 'pending_retry') return null;
   return renderVerdictComment({ ...outcome.result, verdict }, templateLanguage(outcome.facts.ticketFacts.language));
 }
 
@@ -98,6 +98,7 @@ async function commentAction(ticket: IssueWithComments, body: string, parentId: 
 export async function applyOutcome(args: { issue: LinearIssue; comments: readonly LinearComment[]; outcome: EvaluationOutcome; mode: Mode; startedFrom: StartedFrom }, deps: ActionDeps): Promise<ActionsResult> {
   const { outcome, mode } = args;
   let body = renderOutcomeBody(outcome);
+  if (body === null) throw new Error('applyOutcome called with pending_retry');
   const issue = await preActionCheck(args.issue.id, args.startedFrom, deps);
   if (issue === null) return skipped;
   const actions = outcome.kind === 'evaluated' ? await updateLabels(issue, outcome.label, deps) : [];
