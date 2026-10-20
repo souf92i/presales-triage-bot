@@ -8,7 +8,7 @@ import { QUOTE_STATUSES } from '../domain/types.js';
 const nullableText = z.string().nullable();
 const pageInfoSchema = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() });
 const noteTargetSchema = z.object({ noteId: z.string(), targetOpportunityId: z.string().nullable().optional(), targetCompanyId: z.string().nullable().optional(), deletedAt: z.string().nullable() });
-const noteSchema = z.object({ id: z.string(), createdAt: z.string(), bodyV2: z.object({ markdown: z.string().nullable().optional() }).nullable().optional(), deletedAt: z.string().nullable() });
+const noteSchema = z.object({ id: z.string(), createdAt: z.string(), bodyV2: z.object({ markdown: z.string().nullable() }), deletedAt: z.string().nullable() });
 const quoteSchema = z.object({ id: z.string(), opportunityId: z.string(), status: z.enum(QUOTE_STATUSES), deletedAt: z.string().nullable() });
 const quoteLineSchema = z.object({ id: z.string(), quoteId: z.string(), productId: z.string().nullable(), name: nullableText, description: nullableText, deletedAt: z.string().nullable() });
 const opportunitySchema = z.object({
@@ -90,7 +90,7 @@ export function createTwentyClient(opts: { baseUrl: string; apiKey: string; fetc
       const ids = [...new Set(targets.map((row) => row.noteId))];
       if (ids.length === 0) return [];
       const notes = await listChunked(context, 'notes', 'id', ids, noteSchema);
-      return notes.filter((row) => row.deletedAt === null).map((row) => ({ id: row.id, createdAt: row.createdAt, bodyMarkdown: row.bodyV2?.markdown ?? '' }));
+      return notes.filter((row) => row.deletedAt === null).map((row) => ({ id: row.id, createdAt: row.createdAt, bodyMarkdown: row.bodyV2.markdown ?? '' }));
     },
     async listQuotes(opportunityId) {
       const quotes = (await list(context, 'quotes', filterParam('opportunityId', 'eq', opportunityId), quoteSchema)).filter((row) => row.deletedAt === null);

@@ -67,8 +67,13 @@ describe('Twenty client', () => {
   });
 
   it('ignores deleted targets and notes', async () => {
-    const fetch = fakeFetch(json(page('noteTargets', [{ noteId: 'gone', targetOpportunityId: 'o', deletedAt: 'x' }, { noteId: 'n', targetOpportunityId: 'o', deletedAt: null }])), json(page('notes', [{ id: 'n', createdAt: 'x', bodyV2: {}, deletedAt: 'x' }])));
+    const fetch = fakeFetch(json(page('noteTargets', [{ noteId: 'gone', targetOpportunityId: 'o', deletedAt: 'x' }, { noteId: 'n', targetOpportunityId: 'o', deletedAt: null }])), json(page('notes', [{ id: 'n', createdAt: 'x', bodyV2: { markdown: null }, deletedAt: 'x' }])));
     await expect(client(fetch).listNotes({ kind: 'opportunity', id: 'o' })).resolves.toEqual([]);
+  });
+
+  it('fails on a note without its body field', async () => {
+    const fetch = fakeFetch(json(page('noteTargets', [{ noteId: 'n', targetOpportunityId: 'o', deletedAt: null }])), json(page('notes', [{ id: 'n', createdAt: 'x', deletedAt: null }])));
+    await expect(client(fetch).listNotes({ kind: 'opportunity', id: 'o' })).rejects.toBeInstanceOf(DependencyError);
   });
 
   it('skips the notes call when no target exists', async () => {
