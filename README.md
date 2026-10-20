@@ -4,8 +4,10 @@ This bot reviews Presales tickets in Linear against the agreed triage policy. It
 
 ## Setup
 
+For a production deployment with Docker, follow the [deployment guide](docs/deployment.md).
+
 - Create the Linear app `Presales Triage` as an OAuth2 app. Enable the `client_credentials` grant and `read,write` scopes. Its token acts as the app and is renewed by the bot.
-- Create a Microsoft Entra app with `Calendars.ReadBasic.All` application permission and admin consent. Restrict it with Exchange Online RBAC for Applications: make a management scope over the pool mailboxes, then use `New-ManagementRoleAssignment` for the app service principal. Use `Test-ServicePrincipalAuthorization` to confirm a mailbox outside the pool is refused. The first active pool mailbox runs `getSchedule`.
+- Create a Microsoft Entra app with no `Calendars.*` permission in Entra, because Entra grants add to Exchange grants and would open every mailbox. Give access with Exchange Online RBAC for Applications only: make a management scope over the pool mailboxes, then use `New-ManagementRoleAssignment` with the role `Application Calendars.Read` for the app service principal. Use `Test-ServicePrincipalAuthorization` to confirm a mailbox outside the pool is refused. The first active pool mailbox runs `getSchedule`.
 - Create a Twenty API key with read access to opportunities, companies, notes, note targets, quotes and quote lines.
 - In the Linear Asks form, add `Technical discovery` as a Type of Request option.
 - Create Linear labels: `demo`, `technical discovery`, `poc`, `rfi rfp`, `triage-override`. Startup lists missing labels and stops.
