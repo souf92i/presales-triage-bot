@@ -3,21 +3,22 @@ import type { TwentyClient } from './types.js';
 import type { FetchLike } from './http.js';
 import { requestJson } from './http.js';
 import { DependencyError } from '../errors.js';
+import { QUOTE_STATUSES } from '../domain/types.js';
 
 const nullableText = z.string().nullable();
 const pageInfoSchema = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() });
-const noteTargetSchema = z.object({ noteId: z.string(), targetOpportunityId: z.string().nullable().optional(), targetCompanyId: z.string().nullable().optional(), deletedAt: z.unknown().nullable() });
-const noteSchema = z.object({ id: z.string(), createdAt: z.string(), bodyV2: z.object({ markdown: z.string().nullable().optional() }).nullable().optional(), deletedAt: z.unknown().nullable() });
-const quoteSchema = z.object({ id: z.string(), opportunityId: z.string(), status: z.enum(['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED']), deletedAt: z.unknown().nullable() });
-const quoteLineSchema = z.object({ id: z.string(), quoteId: z.string(), productId: z.string().nullable(), name: nullableText, description: nullableText, deletedAt: z.unknown().nullable() });
+const noteTargetSchema = z.object({ noteId: z.string(), targetOpportunityId: z.string().nullable().optional(), targetCompanyId: z.string().nullable().optional(), deletedAt: z.string().nullable() });
+const noteSchema = z.object({ id: z.string(), createdAt: z.string(), bodyV2: z.object({ markdown: z.string().nullable().optional() }).nullable().optional(), deletedAt: z.string().nullable() });
+const quoteSchema = z.object({ id: z.string(), opportunityId: z.string(), status: z.enum(QUOTE_STATUSES), deletedAt: z.string().nullable() });
+const quoteLineSchema = z.object({ id: z.string(), quoteId: z.string(), productId: z.string().nullable(), name: nullableText, description: nullableText, deletedAt: z.string().nullable() });
 const opportunitySchema = z.object({
   id: z.string(), companyId: z.string().nullable(), dealtype: nullableText, hosting: z.array(z.string()).nullable(),
   decisionnaires: nullableText, besoin: nullableText, technicalInformation: nullableText, blocker: nullableText, description: nullableText,
-  salesChannel: nullableText, dataQualityMissing: nullableText, dealActualPartner: z.unknown().optional(), dealActualPartnerId: z.unknown().optional(), deletedAt: z.unknown().nullable(),
+  salesChannel: nullableText, dataQualityMissing: nullableText, dealActualPartner: z.unknown().optional(), dealActualPartnerId: z.unknown().optional(), deletedAt: z.string().nullable(),
 }).superRefine((record, context) => {
   if (!('dealActualPartner' in record) && !('dealActualPartnerId' in record)) context.addIssue({ code: 'custom', message: 'partner field is required' });
 });
-const companySchema = z.object({ id: z.string(), name: z.string(), deletedAt: z.unknown().nullable() });
+const companySchema = z.object({ id: z.string(), name: z.string(), deletedAt: z.string().nullable() });
 type Context = { readonly fetchFn: FetchLike; readonly root: string; readonly headers: HeadersInit };
 
 function filterParam(field: string, op: string, value: string | readonly string[]): string {

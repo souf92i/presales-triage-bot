@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DependencyError } from '../../src/errors.js';
 import { createGraphClient, parseGraphDateTime } from '../../src/clients/graph.js';
 
 function json(value: unknown, status = 200): Response { return new Response(JSON.stringify(value), { status }); }
@@ -24,5 +25,7 @@ describe('Graph client', () => {
   it('marks busy, tentative and oof overlaps as not free', async () => { const [s, e] = dates(); for (const status of ['busy', 'tentative', 'oof']) { const { client } = graph(fakeFetch(token(), schedule([entry('a', [{ status, start: { dateTime: '2026-10-22T11:30:00' }, end: { dateTime: '2026-10-22T12:30:00' } }])]))); await expect(client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', false]])); } });
   it('treats free, workingElsewhere and unknown as available, and an item ending at slot start as non-overlapping', async () => { const [s, e] = dates(); const { client } = graph(fakeFetch(token(), schedule([entry('a', ['free', 'workingElsewhere', 'unknown', 'busy'].map((status, index) => ({ status, start: { dateTime: index === 3 ? '2026-10-22T10:00:00' : '2026-10-22T11:20:00' }, end: { dateTime: '2026-10-22T11:00:00' } })))]))); await expect(client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', true]])); });
   it('throws DependencyError for a schedule error or a missing schedule', async () => { const [s, e] = dates(); await expect(graph(fakeFetch(token(), schedule([{ scheduleId: 'a', error: { code: 'Error' } }]))).client.getAvailability(['a'], s, e)).rejects.toMatchObject({ dependency: 'graph' }); await expect(graph(fakeFetch(token(), schedule([]))).client.getAvailability(['a'], s, e)).rejects.toMatchObject({ dependency: 'graph' }); });
+  it('treats a null schedule error as available', async () => { const [s, e] = dates(); await expect(graph(fakeFetch(token(), schedule([{ scheduleId: 'a', error: null }]))).client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', true]])); });
+  it('clears the cached token after a 401', async () => { const fetch = fakeFetch(token(), new Response(null, { status: 401 }), token(), schedule([entry('a')])); const { client } = graph(fetch); const [s, e] = dates(); await expect(client.getAvailability(['a'], s, e)).rejects.toMatchObject({ dependency: 'graph' } satisfies Partial<DependencyError>); await expect(client.getAvailability(['a'], s, e)).resolves.toEqual(new Map([['a', true]])); expect(fetch.mock.calls).toHaveLength(4); });
   it('parseGraphDateTime', () => { expect(parseGraphDateTime('2026-10-22T11:00:00.0000000').toISOString()).toBe('2026-10-22T11:00:00.000Z'); });
 });

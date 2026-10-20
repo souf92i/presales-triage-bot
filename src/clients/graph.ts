@@ -15,9 +15,9 @@ export function parseGraphDateTime(value: string): Date {
 }
 function formatUtc(date: Date): string { return date.toISOString().replace(/\.\d{3}Z$/, ''); }
 
-export function createGraphClient(opts: { tenantId: string; clientId: string; clientSecret: string; schedulerMailbox: string; fetch?: FetchLike; clock?: Clock }): GraphClient {
+export function createGraphClient(opts: { tenantId: string; clientId: string; clientSecret: string; schedulerMailbox: string; fetch?: FetchLike; clock: Clock }): GraphClient {
   const fetchFn = opts.fetch ?? fetch;
-  const clock = opts.clock ?? (() => new Date());
+  const { clock } = opts;
   let cached: { token: string; expiresAt: Date } | null = null;
   const invalid = (message: string) => new DependencyError('graph', message);
 
@@ -45,7 +45,7 @@ export function createGraphClient(opts: { tenantId: string; clientId: string; cl
       const byEmail = new Map(parsed.data.value.map((entry) => [entry.scheduleId.toLowerCase(), entry]));
       return new Map(emails.map((email) => {
         const entry = byEmail.get(email.toLowerCase());
-        if (entry === undefined || entry.error !== undefined) throw invalid(`Graph schedule unavailable for ${email}`);
+        if (entry === undefined || entry.error != null) throw invalid(`Graph schedule unavailable for ${email}`);
         const busy = (entry.scheduleItems ?? []).some((item) => ['busy', 'tentative', 'oof'].includes(item.status) && parseGraphDateTime(item.start.dateTime) < endUtc && parseGraphDateTime(item.end.dateTime) > startUtc);
         return [email.toLowerCase(), !busy] as const;
       }));

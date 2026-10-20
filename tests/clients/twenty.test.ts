@@ -12,7 +12,7 @@ const opportunity = {
 function fakeFetch(...responses: Response[]): any {
   return vi.fn(async () => responses.shift() ?? new Response(null, { status: 500 }));
 }
-function json(value: unknown, status = 200): Response { return new Response(JSON.stringify(value), { status: { status }.status }); }
+function json(value: unknown, status = 200): Response { return new Response(JSON.stringify(value), { status }); }
 function client(fetch: typeof globalThis.fetch) { return createTwentyClient({ baseUrl: 'https://crm.test/', apiKey: 'k', fetch }); }
 function page(plural: string, rows: unknown[], pageInfo: { hasNextPage: boolean; endCursor: string | null } = { hasNextPage: false, endCursor: null }) { return { data: { [plural]: rows }, pageInfo }; }
 
@@ -35,9 +35,19 @@ describe('Twenty client', () => {
     await expect(client(fakeFetch(json({ data: { opportunity: withoutHosting } }))).getOpportunity('x')).rejects.toMatchObject({ dependency: 'twenty' } satisfies Partial<DependencyError>);
   });
 
+  it('rejects an opportunity without deletedAt', async () => {
+    const { deletedAt: _deletedAt, ...withoutDeletedAt } = opportunity;
+    await expect(client(fakeFetch(json({ data: { opportunity: withoutDeletedAt } }))).getOpportunity('x')).rejects.toMatchObject({ dependency: 'twenty' } satisfies Partial<DependencyError>);
+  });
+
   it('treats dealActualPartnerId as a partner', async () => {
     const { dealActualPartner, ...record } = opportunity;
     await expect(client(fakeFetch(json({ data: { opportunity: { ...record, dealActualPartnerId: 'p1' } } }))).getOpportunity('x')).resolves.toMatchObject({ hasActualPartner: true });
+  });
+
+  it('rejects an opportunity without either partner key', async () => {
+    const { dealActualPartner: _dealActualPartner, ...withoutPartner } = opportunity;
+    await expect(client(fakeFetch(json({ data: { opportunity: withoutPartner } }))).getOpportunity('x')).rejects.toMatchObject({ dependency: 'twenty' } satisfies Partial<DependencyError>);
   });
 
   it('getCompany maps and returns null on 404', async () => {
@@ -56,7 +66,7 @@ describe('Twenty client', () => {
   });
 
   it('ignores deleted targets and notes', async () => {
-    const fetch = fakeFetch(json(page('noteTargets', [{ noteId: 'gone', targetOpportunityId: 'o', deletedAt: 'x' as string | null }, { noteId: 'n', targetOpportunityId: 'o', deletedAt: null as string | null }])), json(page('notes', [{ id: 'n', createdAt: 'x', bodyV2: {}, deletedAt: 'x' }])));
+    const fetch = fakeFetch(json(page('noteTargets', [{ noteId: 'gone', targetOpportunityId: 'o', deletedAt: 'x' }, { noteId: 'n', targetOpportunityId: 'o', deletedAt: null }])), json(page('notes', [{ id: 'n', createdAt: 'x', bodyV2: {}, deletedAt: 'x' }])));
     await expect(client(fetch).listNotes({ kind: 'opportunity', id: 'o' })).resolves.toEqual([]);
   });
 
