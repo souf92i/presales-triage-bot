@@ -44,6 +44,7 @@ function dealType(value: string | null): DealType {
 
 async function gatherDeal(opportunity: Opportunity, ticketSources: readonly SourceText[], deps: GatherDeps, now: Date) {
   const o = blankPlaceholders(opportunity, deps.config.placeholderValues);
+  const type = dealType(o.dealtype);
   const notes = await gatherNotes(o, deps, now);
   const pocQuote = hasPocQuote(await deps.twenty.listQuotes(o.id), deps.config);
   const sources = [...opportunitySources(o), ...notes.map((note) => ({ id: note.id, label: `Note on ${note.target}`, createdAt: note.createdAt, text: note.bodyMarkdown })), ...ticketSources];
@@ -52,7 +53,7 @@ async function gatherDeal(opportunity: Opportunity, ticketSources: readonly Sour
     discoverySinceIso: subtractMonths(now, deps.config.discoveryMaxAgeMonths).toISOString(),
     approvers: deps.config.approvers, noteIds: new Set(notes.map((note) => note.id)),
   });
-  const deal: DealFacts = { opportunity: o, dealType: dealType(o.dealtype), notes, hasPocQuote: pocQuote, ...mergeQualification(o, extraction) };
+  const deal: DealFacts = { opportunity: o, dealType: type, notes, hasPocQuote: pocQuote, ...mergeQualification(o, extraction) };
   return { deal, raw: result.raw };
 }
 

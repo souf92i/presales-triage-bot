@@ -17,6 +17,13 @@ describe('CRM link resolution', () => {
     )).toEqual({ kind: 'opportunity', id: '2341bae4-2621-4cf5-b5f3-ffe7ae25362d' });
   });
 
+  it('resolves an opportunity link with an uppercase kind', () => {
+    expect(resolveCrmLink(
+      'https://crm.evertrust.internal/object/Opportunity/2341bae4-2621-4cf5-b5f3-ffe7ae25362d',
+      ['End customer'],
+    )).toEqual({ kind: 'opportunity', id: '2341bae4-2621-4cf5-b5f3-ffe7ae25362d' });
+  });
+
   it('lowercases an opportunity id', () => {
     expect(resolveCrmLink(
       'https://crm.evertrust.internal/object/opportunity/797DB51C-36BD-5669-9966-AE08D78F1E77',

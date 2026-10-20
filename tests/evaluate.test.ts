@@ -80,6 +80,7 @@ describe('evaluateTicket', () => {
   it('throws DependencyError on an unknown dealtype', async () => {
     const s = setup({ opportunity: { dealtype: 'PARTNERSHIP' } });
     await expect(evaluateTicket(s.input, s.deps)).rejects.toMatchObject({ name: 'DependencyError', dependency: 'twenty' });
+    expect(s.deps.llm.inputs.qualification).toEqual([]);
   });
 
   it('blanks placeholder fields before the LLM and uses its decisionMaker', async () => {

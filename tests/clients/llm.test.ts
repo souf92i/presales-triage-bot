@@ -40,13 +40,13 @@ describe('LLM client', () => {
   });
 
   it.each([
-    ['refusal', { stop_reason: 'refusal', parsed_output: ticket, model: 'm' }],
-    ['max_tokens', { stop_reason: 'max_tokens', parsed_output: ticket, model: 'm' }],
-    ['null parsed_output', { stop_reason: 'end_turn', parsed_output: null, model: 'm' }],
-    ['a bad date format', { stop_reason: 'end_turn', parsed_output: { ...ticket, slot: { ...ticket.slot!, date: '22.10' } }, model: 'm' }],
-    ['an invalid timezone', { stop_reason: 'end_turn', parsed_output: { ...ticket, slot: { ...ticket.slot!, timezone: 'Europe/Not-Real' } }, model: 'm' }],
-  ])('throws DependencyError on %s', async (_name, response) => {
-    await expect(client(fake(response)).extractTicketFacts(input)).rejects.toMatchObject({ dependency: 'llm' });
+    ['refusal', { stop_reason: 'refusal', parsed_output: ticket, model: 'm' }, 'LLM did not return a usable response: refusal'],
+    ['max_tokens', { stop_reason: 'max_tokens', parsed_output: ticket, model: 'm' }, 'LLM did not return a usable response: max_tokens'],
+    ['null parsed_output', { stop_reason: 'end_turn', parsed_output: null, model: 'm' }, 'LLM did not return a usable response'],
+    ['a bad date format', { stop_reason: 'end_turn', parsed_output: { ...ticket, slot: { ...ticket.slot!, date: '22.10' } }, model: 'm' }, 'invalid LLM output'],
+    ['an invalid timezone', { stop_reason: 'end_turn', parsed_output: { ...ticket, slot: { ...ticket.slot!, timezone: 'Europe/Not-Real' } }, model: 'm' }, 'invalid LLM output'],
+  ])('throws DependencyError on %s', async (_name, response, message) => {
+    await expect(client(fake(response)).extractTicketFacts(input)).rejects.toMatchObject({ dependency: 'llm', message });
   });
 
   it('throws DependencyError on min > max volume', async () => {

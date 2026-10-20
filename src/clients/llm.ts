@@ -22,7 +22,10 @@ export function createLlmClient(opts: { model: string; effort: string; parse: Pa
   async function extract<T>(system: string, content: string, schema: unknown, normalize: (raw: unknown) => T): Promise<LlmResult<T>> {
     try {
       const response = await opts.parse({ model: opts.model, max_tokens: 16000, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', thinking: { type: 'adaptive' }, output_config: { effort: opts.effort, format: zodOutputFormat(schema as never) }, system, messages: [{ role: 'user', content }] });
-      if (response.stop_reason === 'refusal' || response.stop_reason === 'max_tokens' || response.parsed_output === null) throw new DependencyError('llm', 'LLM did not return a usable response');
+      if (response.stop_reason !== 'end_turn' || response.parsed_output === null) {
+        const suffix = response.stop_reason === 'end_turn' ? '' : `: ${response.stop_reason}`;
+        throw new DependencyError('llm', `LLM did not return a usable response${suffix}`);
+      }
       return { value: normalize(response.parsed_output), raw: response.parsed_output, model: response.model };
     } catch (error) {
       if (error instanceof DependencyError) throw error;

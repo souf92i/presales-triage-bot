@@ -65,6 +65,7 @@ Run `npm run build && npm run replay -- fixtures/replay/PRE-304.json`. To replay
 ## Dry run
 
 Run `npm run build && npm run dry-run`, or `npm run dry-run -- PRE-304 PRE-301`. It reads live data and prints each verdict and comment without writing to Linear or a state file.
+It evaluates each ticket as a first evaluation: it does not know the questions the bot asked earlier.
 
 ## Enforce mode
 

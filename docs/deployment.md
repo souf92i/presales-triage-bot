@@ -99,7 +99,7 @@ Test-ServicePrincipalAuthorization -Identity <OBJECT_ID> -Resource <OTHER_MAILBO
 
 The `Application Calendars.Read` line must show `InScope` = `False`.
 
-This test checks the Exchange side only. It ignores Entra grants, so step 3.1.4 is still required. Exchange can take 30 minutes to 2 hours to apply a change to live calls.
+This test checks the Exchange side only. It ignores Entra grants. Section 5, step 6 checks the real access. Exchange can take 30 minutes to 2 hours to apply a change to live calls.
 
 The bot calls `getSchedule` on the first active mailbox in `pool`. Keep that mailbox in the group.
 
@@ -159,9 +159,28 @@ The bot calls `getSchedule` on the first active mailbox in `pool`. Keep that mai
    chmod 600 .env
    ```
 
+6. Check the calendar access with a live call. You need `curl` and `jq`. Exchange can take up to 2 hours to apply the scope from section 3.
+
+   ```bash
+   set -a; . ./.env; set +a
+   TOKEN=$(curl -s -X POST "https://login.microsoftonline.com/$GRAPH_TENANT_ID/oauth2/v2.0/token" \
+     -d client_id="$GRAPH_CLIENT_ID" -d client_secret="$GRAPH_CLIENT_SECRET" \
+     -d scope=https://graph.microsoft.com/.default -d grant_type=client_credentials | jq -r .access_token)
+   check() {
+     curl -s -o /dev/null -w "%{http_code}\n" -X POST "https://graph.microsoft.com/v1.0/users/$1/calendar/getSchedule" \
+       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+       -d "{\"schedules\":[\"$1\"],\"startTime\":{\"dateTime\":\"2030-01-07T09:00:00\",\"timeZone\":\"UTC\"},\"endTime\":{\"dateTime\":\"2030-01-07T18:00:00\",\"timeZone\":\"UTC\"}}"
+   }
+   check <POOL_MAILBOX>
+   check <OTHER_MAILBOX>
+   ```
+
+   The pool mailbox must return `200`. The other mailbox must return `403`. If the other mailbox returns `200`, the app has a tenant-wide permission in Entra: remove it (section 3.1, step 4).
+
 ## 6. Dry run first
 
 The dry run uses live data and writes nothing to Linear.
+It evaluates each ticket as a first evaluation: it does not know the questions the bot asked earlier.
 
 1. Build the image:
 

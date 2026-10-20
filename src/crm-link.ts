@@ -15,7 +15,7 @@ export function resolveCrmLink(raw: string, target: readonly Target[]): CrmLink 
     return { kind: 'invalid', raw };
   }
 
-  const kind = match[1];
+  const kind = match[1]?.toLowerCase();
   const id = match[2];
   if (kind === undefined || id === undefined) {
     return { kind: 'invalid', raw };

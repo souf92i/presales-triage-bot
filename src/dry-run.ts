@@ -34,9 +34,9 @@ function printTicket(ticket: IssueWithComments, outcome: Awaited<ReturnType<type
   print(`comment: ${comment}`);
 }
 
-function printDependency(ticket: IssueWithComments, error: DependencyError): void {
-  print(ticket.issue.identifier);
-  print(`title: ${ticket.issue.title}`);
+function printDependency(identifier: string, error: DependencyError, title?: string): void {
+  print(identifier);
+  if (title !== undefined) print(`title: ${title}`);
   print('verdict: pending_retry');
   print(`comment: pending_retry: ${error.dependency}: ${error.message}`);
 }
@@ -52,7 +52,7 @@ async function evaluateTickets(tickets: readonly (IssueWithComments | string)[],
       const input = ticketInput(ticket, deps.workspace.users, deps.botUserId);
       printTicket(ticket, await evaluateTicket({ issue: ticket.issue, ...input, lastAskKeys: [] }, { ...deps, history: deps.store.index }));
     } catch (error) {
-      if (error instanceof DependencyError) printDependency(ticket, error);
+      if (error instanceof DependencyError) printDependency(ticket.issue.identifier, error, ticket.issue.title);
       else throw error;
     }
   }
@@ -76,9 +76,15 @@ async function run(): Promise<void> {
     const deps: PollerDeps = { config, linear, twenty, graph, llm, store, workspace, botUserId, clock, random: Math.random, log };
     await refreshIndex(deps);
     const requested = process.argv.slice(2);
-    const tickets = requested.length === 0
-      ? await linear.listTriageIssues(config.teamKey)
-      : await Promise.all(requested.map((identifier) => linear.getIssueWithComments(identifier).then((ticket) => ticket ?? identifier)));
+    const tickets: (IssueWithComments | string)[] = requested.length === 0 ? [...await linear.listTriageIssues(config.teamKey)] : [];
+    for (const identifier of requested) {
+      try {
+        tickets.push((await linear.getIssueWithComments(identifier)) ?? identifier);
+      } catch (error) {
+        if (error instanceof DependencyError) printDependency(identifier, error);
+        else throw error;
+      }
+    }
     await evaluateTickets(tickets, deps);
   } finally {
     store.close();
