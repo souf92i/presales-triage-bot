@@ -14,7 +14,7 @@ export function opportunitySources(opportunity: Opportunity): readonly SourceTex
   return fields.filter((field) => opportunity[field].trim() !== '').map((field) => ({ id: field, label: field, createdAt: null, text: opportunity[field] }));
 }
 
-const missingItem = { status: 'missing', value: null, evidence: null } as const;
+export const missingItem = { status: 'missing', value: null, evidence: null } as const;
 
 function volumeValue(min: number, max: number): string {
   return min === max ? String(min) : `${min}-${max}`;

@@ -44,11 +44,18 @@ describe('evidence checks', () => {
     expect(value.items.hosting).toEqual(missingItem);
   });
 
+  it('turns a declared unobtainable item with a bad quote into missing', () => {
+    const base = extraction();
+    const input = { ...base, items: { ...base.items, hosting: { status: 'declared_unobtainable' as const, value: null, evidence: { sourceId: 'ticket', quote: 'unobtainable' } } } };
+    expect(verifyQualification(input, toSourceMap([source('ticket', 'other')]), { discoverySinceIso: '', approvers: [], noteIds: new Set() }).items.hosting).toEqual(missingItem);
+  });
+
   it('keeps discovery evidence only from a recent note', () => {
     const input = { ...extraction(), discoveryEvidence: { sourceId: 'note-1', quote: 'discovery done' } };
     const options = { discoverySinceIso: '2025-10-20T12:00:00Z', approvers: [], noteIds: new Set(['note-1']) };
     expect(verifyQualification(input, toSourceMap([source('note-1', 'discovery done', '2026-01-10T00:00:00Z')]), options).discoveryEvidence).toEqual(input.discoveryEvidence);
     expect(verifyQualification(input, toSourceMap([source('note-1', 'discovery done', '2025-01-10T00:00:00Z')]), options).discoveryEvidence).toBeNull();
+    expect(verifyQualification(input, toSourceMap([source('note-1', 'discovery done')]), options).discoveryEvidence).toBeNull();
     for (const id of ['besoin', 'ticket', 'comment-1']) {
       expect(verifyQualification({ ...input, discoveryEvidence: { sourceId: id, quote: 'discovery done' } }, toSourceMap([source(id, 'discovery done', '2026-01-10T00:00:00Z')]), options).discoveryEvidence).toBeNull();
     }
@@ -63,8 +70,10 @@ describe('evidence checks', () => {
   it('keeps an approver exception only for a configured approver', () => {
     const options = { discoverySinceIso: '', approvers: ['Vincent'], noteIds: new Set<string>() };
     for (const [approver, kept] of [['Vincent L.', true], ['Marc', false], ['Vincentia', false]] as const) {
-      const input = { ...extraction(), approverException: { approver, evidence: { sourceId: 'ticket', quote: 'approved' } } };
-      expect(verifyQualification(input, toSourceMap([source('ticket', 'approved')]), options).approverException === null).toBe(!kept);
+      const input = { ...extraction(), approverException: { approver, evidence: { sourceId: 'ticket', quote: 'Vincent approved' } } };
+      expect(verifyQualification(input, toSourceMap([source('ticket', 'Vincent approved')]), options).approverException === null).toBe(!kept);
     }
+    const input = { ...extraction(), approverException: { approver: 'Vincent', evidence: { sourceId: 'ticket', quote: 'ok for a free PoC' } } };
+    expect(verifyQualification(input, toSourceMap([source('ticket', 'ok for a free PoC')]), options).approverException).toBeNull();
   });
 });

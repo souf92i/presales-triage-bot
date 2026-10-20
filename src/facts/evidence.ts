@@ -1,6 +1,7 @@
 import type { SourceText } from '../clients/types.js';
 import type { Evidence, QualificationExtraction, TicketFacts } from '../domain/types.js';
 import { normalizeWhitespace } from '../text.js';
+import { missingItem } from './qualification.js';
 
 export type SourceMap = ReadonlyMap<string, SourceText>;
 
@@ -25,8 +26,6 @@ export function verifyTicketFacts(facts: TicketFacts, sources: SourceMap): Ticke
     onsite: checkEvidence(facts.onsite, sources) ? facts.onsite : null,
   };
 }
-
-const missingItem = { status: 'missing', value: null, evidence: null } as const;
 
 function verifiedItem<T extends QualificationExtraction['items'][keyof QualificationExtraction['items']]>(item: T, sources: SourceMap): T | typeof missingItem {
   return (item.status === 'known' || item.status === 'declared_unobtainable') && !checkEvidence(item.evidence, sources) ? missingItem : item;
@@ -57,6 +56,7 @@ export function verifyQualification(
     && opts.noteIds.has(extraction.pocQuoteExpectedEvidence.sourceId) ? extraction.pocQuoteExpectedEvidence : null;
   const approverException = extraction.approverException !== null
     && checkEvidence(extraction.approverException.evidence, sources)
-    && hasApprover(extraction.approverException.approver, opts.approvers) ? extraction.approverException : null;
+    && hasApprover(extraction.approverException.approver, opts.approvers)
+    && hasApprover(extraction.approverException.evidence.quote, opts.approvers) ? extraction.approverException : null;
   return { ...extraction, items, volume, partnerNamed, discoveryEvidence, pocQuoteExpectedEvidence, approverException };
 }

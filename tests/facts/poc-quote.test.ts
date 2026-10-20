@@ -15,9 +15,10 @@ describe('PoC quotes', () => {
   });
 
   it('matches a configured product id', () => expect(isPocLine(line('other', '', 'product-1'), { ...defaultConfig(), pocProducts: ['product-1'] })).toBe(true));
-  it('ignores EXPIRED and REJECTED quotes and counts DRAFT', () => {
+  it('ignores EXPIRED and REJECTED quotes', () => {
     const config = defaultConfig();
-    expect(hasPocQuote([quote('EXPIRED', [line('PS-POC')]), quote('REJECTED', [line('PS-POC')]), quote('DRAFT', [line('PS-POC')])], config)).toBe(true);
+    expect(hasPocQuote([quote('EXPIRED', [line('PS-POC')]), quote('REJECTED', [line('PS-POC')])], config)).toBe(false);
   });
+  it('counts DRAFT quotes', () => expect(hasPocQuote([quote('DRAFT', [line('PS-POC')])], defaultConfig())).toBe(true));
   it('requires a PoC line', () => expect(hasPocQuote([quote('SENT', [line('CLM license')])], defaultConfig())).toBe(false));
 });
