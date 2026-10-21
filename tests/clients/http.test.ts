@@ -10,4 +10,9 @@ describe('requestJson', () => {
     await expect(requestJson('linear', async () => new Response(null, { status: 500 }), 'https://api.linear.app/graphql', {})).resolves.toEqual({ status: 500, body: null });
     await expect(requestJson('linear', async () => new Response('not JSON', { status: 502 }), 'https://api.linear.app/graphql', {})).resolves.toEqual({ status: 502, body: null });
   });
+
+  it('names the network cause of a failed fetch', async () => {
+    const failed = async () => { throw new TypeError('fetch failed', { cause: new Error('getaddrinfo ENOTFOUND crm.example.com') }); };
+    await expect(requestJson('twenty', failed, 'https://crm.example.com/rest/opportunities/1', {})).rejects.toThrow('Network failure for /rest/opportunities/1: getaddrinfo ENOTFOUND crm.example.com');
+  });
 });
