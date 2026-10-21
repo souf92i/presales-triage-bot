@@ -8,7 +8,7 @@ Before you start, make sure you have each item:
 
 - [ ] A Linux host or container service owned by Evertrust, with Docker, Docker Compose and outbound HTTPS. The bot has no inbound port.
 - [ ] A Linear OAuth app with the `client_credentials` grant (section 2).
-- [ ] A Microsoft Entra app with Exchange Online RBAC access to the pool mailboxes only (section 3).
+- [ ] A Microsoft Entra app with the `Calendars.ReadBasic.All` application permission and admin consent (section 3).
 - [ ] A Twenty API key (section 4).
 - [ ] An Anthropic API key (section 4).
 - [ ] In the Linear Asks form, the option `Technical discovery` in "Type of Request".
@@ -28,80 +28,17 @@ The token can see public teams only. If the PRE team is private, give the app ac
 
 ## 3. Create the Entra app
 
-You need the Exchange Administrator role in Entra, or membership in the Organization Management role group in Exchange Online.
+An Application Administrator can do steps 1 to 4. A Global Administrator or a Privileged Role Administrator must grant the admin consent in step 5.
 
-The bot reads free/busy data with Microsoft Graph `getSchedule`. Access must cover the pool mailboxes and nothing else. Exchange Online RBAC for Applications gives this scope.
+The bot reads free/busy data with Microsoft Graph `getSchedule`. It uses the application permission `Calendars.ReadBasic.All`. This permission covers every mailbox in the tenant: event subject, time, location, organizer and attendees, but no event body. Keep the client secret safe for this reason.
 
-Important: do not grant a tenant-wide calendar permission in Entra. Microsoft adds Entra grants and Exchange RBAC grants together. If the app has `Calendars.ReadBasic.All` (or any `Calendars.*` permission) with admin consent in Entra, it can read every mailbox and the scope has no effect.
+1. In the Entra admin center, open App registrations and click **New registration**. Name: `Presales Triage`. Account type: single tenant. Redirect URI: leave empty. Click **Register**.
+2. On the **Overview** page, copy the **Application (client) ID** and the **Directory (tenant) ID**.
+3. Open **Certificates & secrets**, then **New client secret**. Choose 12 months. Copy the **Value** at once; the portal hides it later. Add a reminder to rotate it before it expires (section 9).
+4. Open **API permissions**, then **Add a permission** > **Microsoft Graph** > **Application permissions**. Select `Calendars.ReadBasic.All` and click **Add permissions**. Do not add other `Calendars.*` permissions.
+5. Click **Grant admin consent for Evertrust**. The status of `Calendars.ReadBasic.All` must show a green check.
 
-### 3.1 Register the app
-
-1. In the Entra admin center, create an app registration named `Presales Triage`.
-2. Create a client secret. Copy its value.
-3. Copy the Directory (tenant) ID and the Application (client) ID.
-4. Under API permissions, make sure no `Calendars.*` application permission has admin consent. If one does, remove it.
-5. Open Enterprise applications, then open `Presales Triage`. Copy the Application ID and the Object ID. Use these values for `<APP_ID>` and `<OBJECT_ID>` below. Do not use the Object ID from the App registrations page; it is a different value.
-
-### 3.2 Create the pool group
-
-1. Create a mail-enabled security group, for example `Presales Triage Pool`.
-2. Add each pool mailbox from `config.json` directly to the group. Members of nested groups are out of scope.
-
-### 3.3 Assign the scoped role
-
-Connect to Exchange Online:
-
-```powershell
-Connect-ExchangeOnline
-```
-
-Get the distinguished name of the group:
-
-```powershell
-Get-Group "<POOL_GROUP>" | Select-Object DistinguishedName
-```
-
-Create the pointer to the service principal:
-
-```powershell
-New-ServicePrincipal -AppId <APP_ID> -ObjectId <OBJECT_ID> -DisplayName "Presales Triage"
-```
-
-Create a management scope over the group members:
-
-```powershell
-New-ManagementScope -Name "Presales Triage Pool" -RecipientRestrictionFilter "MemberOfGroup -eq '<POOL_GROUP_DN>'"
-```
-
-Assign the calendar role inside that scope:
-
-```powershell
-New-ManagementRoleAssignment -App <OBJECT_ID> -Role "Application Calendars.Read" -CustomResourceScope "Presales Triage Pool"
-```
-
-Exchange has no role for `Calendars.ReadBasic`. `Application Calendars.Read` is the smallest role that allows `getSchedule`.
-
-### 3.4 Check the scope
-
-Test a pool mailbox:
-
-```powershell
-Test-ServicePrincipalAuthorization -Identity <OBJECT_ID> -Resource <POOL_MAILBOX> | Format-Table
-```
-
-The `Application Calendars.Read` line must show `InScope` = `True`.
-
-Test a mailbox outside the pool:
-
-```powershell
-Test-ServicePrincipalAuthorization -Identity <OBJECT_ID> -Resource <OTHER_MAILBOX> | Format-Table
-```
-
-The `Application Calendars.Read` line must show `InScope` = `False`.
-
-This test checks the Exchange side only. It ignores Entra grants. Section 5, step 6 checks the real access. Exchange can take 30 minutes to 2 hours to apply a change to live calls.
-
-The bot calls `getSchedule` on the first active mailbox in `pool`. Keep that mailbox in the group.
+The bot calls `getSchedule` from the first active mailbox in `pool`.
 
 ## 4. Get the Twenty and Anthropic keys
 
@@ -145,9 +82,9 @@ The bot calls `getSchedule` on the first active mailbox in `pool`. Keep that mai
    | `LINEAR_CLIENT_SECRET` | Linear app client secret (section 2) |
    | `TWENTY_BASE_URL` | Twenty base URL, without `/rest` (section 4) |
    | `TWENTY_API_KEY` | Twenty API key (section 4) |
-   | `GRAPH_TENANT_ID` | Entra Directory (tenant) ID (section 3.1) |
-   | `GRAPH_CLIENT_ID` | Entra Application (client) ID (section 3.1) |
-   | `GRAPH_CLIENT_SECRET` | Entra client secret value (section 3.1) |
+   | `GRAPH_TENANT_ID` | Entra Directory (tenant) ID (section 3) |
+   | `GRAPH_CLIENT_ID` | Entra Application (client) ID (section 3) |
+   | `GRAPH_CLIENT_SECRET` | Entra client secret value (section 3) |
    | `ANTHROPIC_API_KEY` | Anthropic API key (section 4) |
    | `ALERT_WEBHOOK_URL` | Optional. A Slack incoming webhook URL for outage alerts. Leave empty to turn alerts off. |
 
@@ -159,23 +96,19 @@ The bot calls `getSchedule` on the first active mailbox in `pool`. Keep that mai
    chmod 600 .env
    ```
 
-6. Check the calendar access with a live call. You need `curl` and `jq`. Exchange can take up to 2 hours to apply the scope from section 3.
+6. Check the calendar access with a live call. You need `curl` and `jq`.
 
    ```bash
    set -a; . ./.env; set +a
    TOKEN=$(curl -s -X POST "https://login.microsoftonline.com/$GRAPH_TENANT_ID/oauth2/v2.0/token" \
      -d client_id="$GRAPH_CLIENT_ID" -d client_secret="$GRAPH_CLIENT_SECRET" \
      -d scope=https://graph.microsoft.com/.default -d grant_type=client_credentials | jq -r .access_token)
-   check() {
-     curl -s -o /dev/null -w "%{http_code}\n" -X POST "https://graph.microsoft.com/v1.0/users/$1/calendar/getSchedule" \
-       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-       -d "{\"schedules\":[\"$1\"],\"startTime\":{\"dateTime\":\"2030-01-07T09:00:00\",\"timeZone\":\"UTC\"},\"endTime\":{\"dateTime\":\"2030-01-07T18:00:00\",\"timeZone\":\"UTC\"}}"
-   }
-   check <POOL_MAILBOX>
-   check <OTHER_MAILBOX>
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST "https://graph.microsoft.com/v1.0/users/<POOL_MAILBOX>/calendar/getSchedule" \
+     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"schedules":["<POOL_MAILBOX>"],"startTime":{"dateTime":"2030-01-07T09:00:00","timeZone":"UTC"},"endTime":{"dateTime":"2030-01-07T18:00:00","timeZone":"UTC"}}'
    ```
 
-   The pool mailbox must return `200`. The other mailbox must return `403`. If the other mailbox returns `200`, the app has a tenant-wide permission in Entra: remove it (section 3.1, step 4).
+   The command must print `200`. A `403` means the admin consent of section 3, step 5 is missing.
 
 ## 6. Dry run first
 
