@@ -50,7 +50,7 @@ async function evaluateTickets(tickets: readonly (IssueWithComments | string)[],
     }
     try {
       const input = ticketInput(ticket, deps.workspace.users, deps.botUserId);
-      printTicket(ticket, await evaluateTicket({ issue: ticket.issue, ...input, lastAskKeys: [] }, { ...deps, history: deps.store.index }));
+      printTicket(ticket, await evaluateTicket({ issue: ticket.issue, ...input, lastAskKeys: [] }, { ...deps, history: deps.store.index, users: deps.workspace.users }));
     } catch (error) {
       if (error instanceof DependencyError) printDependency(ticket.issue.identifier, error, ticket.issue.title);
       else throw error;

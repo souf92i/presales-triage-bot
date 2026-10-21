@@ -59,10 +59,11 @@ export async function runReplay(fixture: ReplayFixture): Promise<ReplayReport> {
   try {
     for (const entry of fixture.history as readonly IndexEntry[]) store.index.upsert(entry);
     if (fixture.backfillComplete) store.cursors.set('backfill_complete', 'true');
-    const input = ticketInput({ issue: fixture.issue as LinearIssue, comments: fixture.comments as LinearComment[] }, fixture.users as LinearUser[] ?? [], fixture.botUserId);
+    const users = fixture.users as LinearUser[] ?? [];
+    const input = ticketInput({ issue: fixture.issue as LinearIssue, comments: fixture.comments as LinearComment[] }, users, fixture.botUserId);
     const outcome = await evaluateTicket({ issue: fixture.issue as LinearIssue, ...input, lastAskKeys: fixture.lastAskKeys as AskKey[] ?? [] }, {
       config: replayConfig(fixture.config), twenty: new MemoryTwenty(fixture.twenty), graph: new MemoryGraph(fixture.calendar),
-      llm: new MemoryLlm(fixture.llm), history: store.index, clock: () => new Date(fixture.now), random: () => 0,
+      llm: new MemoryLlm(fixture.llm), history: store.index, clock: () => new Date(fixture.now), random: () => 0, users,
     });
     const report = outcome.kind === 'manual'
       ? { verdict: 'manual' as const, rules: [], annotations: [], comment: renderOutcomeBody(outcome) }

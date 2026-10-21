@@ -204,7 +204,7 @@ async function evaluateCandidate(candidate: Candidate, mode: Mode, deps: PollerD
   try {
     outcome = await evaluateTicket({
       ...candidate, lastAskKeys: candidate.record?.lastAskKeys ?? [],
-    }, { ...deps, history: deps.store.index, random: randomForIssue(candidate.issue.id) });
+    }, { ...deps, history: deps.store.index, random: randomForIssue(candidate.issue.id), users: deps.workspace.users });
     if (outcome.kind === 'evaluated' && outcome.result.verdict === 'pending_retry') {
       await failCandidate(candidate, mode, outcome, new Error(outcome.result.errors.join('; ')), deps);
       return;

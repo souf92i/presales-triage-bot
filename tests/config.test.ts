@@ -66,8 +66,14 @@ describe('config', () => {
     })).toEqual(defaultConfig());
   });
 
-  it('memberName returns the email local part', () => {
-    expect(memberName({ email: 'sbo@evertrust.fr', active: true })).toBe('sbo');
+  it('memberName returns the matching Linear user first name', () => {
+    expect(memberName({ email: 'VDO@evertrust.fr', active: true }, [{
+      id: 'user-1', name: 'Vincent Dogon', displayName: 'Vincent', email: 'vdo@evertrust.fr',
+    }])).toBe('Vincent');
+  });
+
+  it('memberName falls back to the email local part when no Linear user matches', () => {
+    expect(memberName({ email: 'sbo@evertrust.fr', active: true }, [])).toBe('sbo');
   });
 
   it('templateLanguage maps fr and falls back to en', () => {

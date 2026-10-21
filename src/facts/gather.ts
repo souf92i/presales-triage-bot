@@ -1,5 +1,5 @@
 import { mapRequestType, parseAsksForm } from '../asks-parser.js';
-import type { GraphClient, LinearComment, LinearIssue, LlmClient, SourceText, TwentyClient } from '../clients/types.js';
+import type { GraphClient, LinearComment, LinearIssue, LinearUser, LlmClient, SourceText, TwentyClient } from '../clients/types.js';
 import { memberName, type Config } from '../config.js';
 import { resolveCrmLink } from '../crm-link.js';
 import type { Clock, CrmNote, DealFacts, DealType, Facts, ManualReason, Opportunity, RawLlm, Requester, RequestKind, Slot, SlotWindow } from '../domain/types.js';
@@ -13,7 +13,7 @@ import { blankPlaceholders, mergeQualification, opportunitySources } from './qua
 
 export interface GatherDeps {
   readonly config: Config; readonly twenty: TwentyClient; readonly graph: GraphClient;
-  readonly llm: LlmClient; readonly history: HistoryReader; readonly clock: Clock;
+  readonly llm: LlmClient; readonly history: HistoryReader; readonly clock: Clock; readonly users: readonly LinearUser[];
 }
 export interface GatherInput {
   readonly issue: LinearIssue; readonly requester: Requester | null;
@@ -70,7 +70,7 @@ async function gatherCalendar(window: SlotWindow | null, kind: RequestKind, deps
   return { members: members.map((member) => {
     const free = availability.get(member.email.toLowerCase());
     if (free === undefined) throw new DependencyError('graph', `No availability for ${member.email}`);
-    return { email: member.email, name: memberName(member), free };
+    return { email: member.email, name: memberName(member, deps.users), free };
   }) };
 }
 
@@ -81,7 +81,7 @@ function gatherHistory(companyId: string | null, issueId: string, deps: GatherDe
   if (previous?.assigneeEmail == null) return { hasRecentCompletedDiscovery, owner: null };
   const email = previous.assigneeEmail;
   const member = deps.config.pool.find((candidate) => candidate.email.toLowerCase() === email.toLowerCase());
-  return { hasRecentCompletedDiscovery, owner: { email, name: member ? memberName(member) : previous.assigneeName ?? email, ticketIdentifier: previous.identifier, activeInPool: member?.active ?? false } };
+  return { hasRecentCompletedDiscovery, owner: { email, name: member ? memberName(member, deps.users) : previous.assigneeName ?? email, ticketIdentifier: previous.identifier, activeInPool: member?.active ?? false } };
 }
 
 export async function gatherFacts(input: GatherInput, deps: GatherDeps): Promise<GatherResult> {

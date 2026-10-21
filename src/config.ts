@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { z } from 'zod';
 
+import type { LinearUser } from './clients/types.js';
 import { ConfigError } from './errors.js';
 import { QUOTE_STATUSES, REQUEST_KINDS, type RequestKind, type TemplateLanguage } from './domain/types.js';
 import { RULE_IDS } from './rules/types.js';
@@ -98,8 +99,9 @@ export function loadConfig(path: string, readFile: (path: string) => string = (f
   }
 }
 
-export function memberName(member: PoolMember): string {
-  return member.email.split('@')[0] ?? member.email;
+export function memberName(member: PoolMember, users: readonly LinearUser[]): string {
+  const user = users.find((candidate) => candidate.email.toLowerCase() === member.email.toLowerCase());
+  return user?.name.split(' ')[0] ?? member.email.split('@')[0] ?? member.email;
 }
 
 export function managedLabels(config: Config): readonly string[] {

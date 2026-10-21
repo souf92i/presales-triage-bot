@@ -39,6 +39,7 @@ function setup(options: {
     config: defaultConfig(), twenty: new MemoryTwenty(data),
     graph: new MemoryGraph({ 'sbo@evertrust.fr': true, 'vdo@evertrust.fr': false, 'ela@evertrust.fr': true }),
     llm: new MemoryLlm(outputs, 'replay-model'), history: store.index, clock: () => new Date(NOW), random: () => 0,
+    users: [{ id: 'sbo', name: 'Soufiane Bou', displayName: 'Soufiane', email: 'sbo@evertrust.fr' }],
   };
   return { input, deps, store, outputs };
 }
@@ -112,7 +113,7 @@ describe('evaluateTicket', () => {
     const { facts, result } = await evaluated(s);
     expect(facts.linkedRecordFound).toBe(present); expect(facts.companyId).toBe(companyId);
     expect(s.deps.twenty.calls).toEqual([`getCompany:${companyId}`]);
-    if (present) expect(facts.history?.owner).toMatchObject({ email: 'SBO@evertrust.fr', name: 'sbo', activeInPool: true, ticketIdentifier: 'PRE-250' });
+    if (present) expect(facts.history?.owner).toMatchObject({ email: 'SBO@evertrust.fr', name: 'Soufiane', activeInPool: true, ticketIdentifier: 'PRE-250' });
     else expect(result.denies).toContainEqual({ key: 'crm_link.not_found', recordKind: 'company', id: companyId });
   });
 
@@ -152,7 +153,7 @@ describe('evaluateTicket', () => {
     const { facts, result, raw, label } = await evaluated(s);
     expect(facts.slotWindow).toEqual({ startUtc: '2026-10-22T11:00:00.000Z', endUtc: '2026-10-22T12:00:00.000Z', timezone: 'Europe/Paris', timezoneAssumed: true });
     expect(s.deps.graph.calls).toEqual([{ emails: ['sbo@evertrust.fr', 'vdo@evertrust.fr', 'ela@evertrust.fr'], start: '2026-10-22T11:00:00.000Z', end: '2026-10-22T12:00:00.000Z' }]);
-    expect(facts.calendar?.members).toEqual([{ email: 'sbo@evertrust.fr', name: 'sbo', free: true }, { email: 'vdo@evertrust.fr', name: 'vdo', free: false }, { email: 'ela@evertrust.fr', name: 'ela', free: true }]);
+    expect(facts.calendar?.members).toEqual([{ email: 'sbo@evertrust.fr', name: 'Soufiane', free: true }, { email: 'vdo@evertrust.fr', name: 'vdo', free: false }, { email: 'ela@evertrust.fr', name: 'ela', free: true }]);
     expect(result.verdict).toBe('accepted'); expect(label).toBe('demo');
     expect(raw).toEqual({ model: 'replay-model', ticketFacts: s.outputs.ticketFacts, qualification: s.outputs.qualification });
   });
