@@ -96,16 +96,17 @@ The bot calls `getSchedule` from the first active mailbox in `pool`.
    chmod 600 .env
    ```
 
-6. Check the calendar access with a live call. You need `curl` and `jq`.
+6. Check the calendar access with a live call. You need `curl` and `jq`. The command reads the first active mailbox in `pool` from `config.json`, as the bot does.
 
    ```bash
    set -a; . ./.env; set +a
+   MAILBOX=$(jq -r '[.pool[] | select(.active)][0].email' config.json); echo "$MAILBOX"
    TOKEN=$(curl -s -X POST "https://login.microsoftonline.com/$GRAPH_TENANT_ID/oauth2/v2.0/token" \
      -d client_id="$GRAPH_CLIENT_ID" -d client_secret="$GRAPH_CLIENT_SECRET" \
      -d scope=https://graph.microsoft.com/.default -d grant_type=client_credentials | jq -r .access_token)
-   curl -s -o /dev/null -w "%{http_code}\n" -X POST "https://graph.microsoft.com/v1.0/users/<POOL_MAILBOX>/calendar/getSchedule" \
-     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-     -d '{"schedules":["<POOL_MAILBOX>"],"startTime":{"dateTime":"2030-01-07T09:00:00","timeZone":"UTC"},"endTime":{"dateTime":"2030-01-07T18:00:00","timeZone":"UTC"}}'
+   jq -n --arg m "$MAILBOX" '{schedules: [$m], startTime: {dateTime: "2030-01-07T09:00:00", timeZone: "UTC"}, endTime: {dateTime: "2030-01-07T18:00:00", timeZone: "UTC"}}' |
+     curl -s -o /dev/null -w "%{http_code}\n" -X POST "https://graph.microsoft.com/v1.0/users/$MAILBOX/calendar/getSchedule" \
+       -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @-
    ```
 
    The command must print `200`. A `403` means the admin consent of section 3, step 5 is missing.
