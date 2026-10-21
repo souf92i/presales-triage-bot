@@ -31,28 +31,45 @@ For a production deployment with Docker, follow the [deployment guide](docs/depl
 
 Copy `config.example.json` to `config.json`. Removing a rule id from `rules` disables that rule.
 
-| Key | Default |
-| --- | --- |
-| `teamKey` | `PRE` |
-| `triageOwnerEmail` | `ela@evertrust.fr` |
-| `pool` | sbo, vdo, mob inactive, ela |
-| `approvers` | Etienne, Mohamed, Soufiane, Vincent |
-| `minDealVolume`, `minPocVolume` | 200, 500 |
-| `maxUnknownItems` | 2 |
-| `waitDays`, `handoffHours` | 7, 2 |
-| `shortNoticeWorkingDays` | 2 |
-| `noteMaxAgeMonths`, `discoveryMaxAgeMonths` | 12, 12 |
-| `pollSeconds` | 120 |
-| `defaultTimezone` | `Europe/Paris` |
-| `enforce` | `false` |
-| `overrideLabel` | `triage-override` |
-| `requestTypes` | demo, technical discovery, poc, rfi rfp mappings |
-| `pocProducts` | `[]` |
-| `pocQuoteLinePattern` | `\bpoc\b\|proof of concept` |
-| `pocQuoteExcludedStatuses` | `EXPIRED`, `REJECTED` |
-| `placeholderValues` | TBD, ?, -, n/a, xxx, à définir, unknown, empty |
-| `llmModel`, `llmEffort` | `claude-sonnet-5-5`, `medium` |
-| `rules` | all rule ids |
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `teamKey` | String. Key of the Linear team to triage. The team must have a triage state and a canceled state. | `PRE` |
+| `triageOwnerEmail` | String. Email of the Linear user who gets an accepted ticket when the company has no previous ticket owner. The user must exist in Linear. | `ela@evertrust.fr` |
+| `pool` | Array of `{ "email": string, "active": boolean }`. The bot reads the calendars of active members for a demo or technical discovery slot. The first active member's mailbox sends the Graph `getSchedule` call, so at least one member must be active. A previous owner who is not active shows as away. | sbo, vdo, mob inactive, ela |
+| `approvers` | Array of names. A PoC exception passes `poc-paid` only when one name appears as a whole word, in any case, in the extracted approver and in the quoted note text. | Etienne, Mohamed, Soufiane, Vincent |
+| `minDealVolume`, `minPocVolume` | Positive integers. `volume-floor` and `poc-volume` deny a new-business deal or PoC when the maximum stated volume is below the value. | 200, 500 |
+| `maxUnknownItems` | Integer, 0 or more. `qualification` denies when more items than this are missing or declared unobtainable. Volume and decision maker must always be known and do not count toward this limit. | 2 |
+| `waitDays` | Positive integer. In enforce mode, after the bot asks a question and the ticket gets no new input, the bot cancels the ticket when the wait expires. The wait expires at the earliest of now plus this number of days, the slot start and the end of the deadline day. | 7 |
+| `handoffHours` | Positive integer. When the evaluation of a ticket fails for this number of hours, the bot posts a hand-off comment. | 2 |
+| `shortNoticeWorkingDays` | Positive integer. `slot` adds a short-notice note when fewer full working days than this are between today and the slot day. Working days are Monday to Friday in `defaultTimezone`, without today and the slot day. | 2 |
+| `noteMaxAgeMonths` | Positive integer. The bot reads company notes from this number of past months and all opportunity notes. | 12 |
+| `discoveryMaxAgeMonths` | Positive integer. `discovery-first` passes when a technical discovery ticket for the company was completed, or a CRM note shows a discovery, in this number of past months. | 12 |
+| `pollSeconds` | Positive integer. Seconds between two polls of Linear. | 120 |
+| `defaultTimezone` | IANA time zone name. The bot uses it for a slot without a time zone, for working days and for the end of the deadline day. | `Europe/Paris` |
+| `enforce` | Boolean. `false` runs shadow mode: the bot only sets the request type label and posts a shadow comment. `true` also changes the ticket state and assignee. | `false` |
+| `overrideLabel` | String. The bot skips a ticket with this label, in any case. The label must exist in Linear. | `triage-override` |
+| `requestTypes` | Array of `{ "formValue", "kind", "label" }`. The bot maps the form request type, in any case, to a `kind` (one of `demo`, `technical_discovery`, `poc`, `rfx`) and sets `label` on the ticket. Each label must exist in Linear, and an unmapped form value gives the `manual` verdict. | demo, technical discovery, poc, rfi rfp mappings |
+| `pocProducts` | Array of Twenty product ids. A quote line with one of these products is a PoC line. | `[]` |
+| `pocQuoteLinePattern` | Regular expression, case-insensitive. A quote line whose name or description matches it is a PoC line. | `\bpoc\b\|proof of concept` |
+| `pocQuoteExcludedStatuses` | Array of quote statuses, each one of `DRAFT`, `SENT`, `ACCEPTED`, `REJECTED`, `EXPIRED`. A quote with one of these statuses is not a PoC quote. | `EXPIRED`, `REJECTED` |
+| `placeholderValues` | Array of strings. A form field or opportunity text field equal to one of these values is empty. The comparison trims spaces and ignores case. | TBD, ?, -, n/a, xxx, à définir, unknown, empty |
+| `llmModel` | String. Claude model id for the LLM calls. | `claude-sonnet-5-5` |
+| `llmEffort` | Effort for the LLM calls. One of `low`, `medium`, `high`, `xhigh`, `max`. | `medium` |
+| `rules` | Array of rule ids to run. See the list below. | all rule ids |
+
+If the file at `CONFIG_PATH` does not exist, the bot uses all defaults. An unknown key makes the config invalid.
+
+Rule ids:
+
+- `single-request`: the ticket has only one request.
+- `crm-link`: the CRM link is valid and the record exists.
+- `notes-exist`: the deal has at least one CRM note.
+- `qualification`: the new-business deal has enough known qualification items.
+- `volume-floor`: the new-business deal volume is at least `minDealVolume`.
+- `discovery-first`: a new-business demo or PoC has a recent technical discovery.
+- `slot`: a demo or technical discovery has a complete future slot and a free active pool member.
+- `poc-volume`: the new-business PoC volume is at least `minPocVolume`.
+- `poc-paid`: a PoC has a PoC quote, a note that expects one, or an approver exception.
 
 ## Running
 
