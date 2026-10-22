@@ -3,7 +3,7 @@ import { defaultConfig } from '../../src/config.js';
 import { blankPlaceholders, mergeQualification, opportunitySources } from '../../src/facts/qualification.js';
 import type { Opportunity, QualificationExtraction } from '../../src/domain/types.js';
 
-const opportunity = (overrides: Partial<Opportunity> = {}): Opportunity => ({ id: 'opp', companyId: null, dealtype: null, hosting: [], decisionnaires: '', besoin: '', technicalInformation: '', blocker: '', description: '', salesChannel: null, hasActualPartner: false, dataQualityMissing: '', ...overrides });
+const opportunity = (overrides: Partial<Opportunity> = {}): Opportunity => ({ id: 'opp', companyId: null, dealtype: null, typeOfNegotiation: null, hosting: [], decisionnaires: '', besoin: '', technicalInformation: '', blocker: '', description: '', salesChannel: null, hasActualPartner: false, dataQualityMissing: '', ...overrides });
 const missing = { status: 'missing', value: null, evidence: null } as const;
 const extraction = (): QualificationExtraction => ({ items: { volume: missing, hosting: missing, solution: missing, decisionMaker: { status: 'known', value: 'LLM', evidence: { sourceId: 'ticket', quote: 'LLM' } }, budget: missing, timeline: missing, currentPki: missing, useCases: missing, clmDriver: missing }, volume: null, solutionIncludesClm: null, discoveryEvidence: null, pocQuoteExpectedEvidence: null, approverException: null, partnerNamed: null });
 

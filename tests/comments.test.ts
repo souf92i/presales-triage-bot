@@ -9,6 +9,7 @@ const denies: readonly Deny[] = [
   { key: 'single_request.multiple', items: [{ kind: 'poc', quote: 'a PoC' }] },
   { key: 'crm_link.invalid', raw: 'not a link', partnerOnly: true },
   { key: 'crm_link.not_found', recordKind: 'opportunity', id: 'opp-1' },
+  { key: 'rfx_deal.not_rfx' },
   { key: 'notes_exist.none', maxAgeMonths: 12 },
   { key: 'qualification.missing', items: [{ id: 'budget', status: 'declared_unobtainable' }], maxUnknown: 2, dataQualityMissing: 'Decision-maker' },
   { key: 'volume_floor.below_min', max: 100, min: 200 },

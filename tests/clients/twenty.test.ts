@@ -5,7 +5,7 @@ import { createTwentyClient } from '../../src/clients/twenty.js';
 const opportunity = {
   id: '2341bae4-2621-4cf5-b5f3-ffe7ae25362d', name: 'SEFE -NB-CLM', companyId: 'ed09e1a7-7857-4ce1-b411-d2df62ff4ad5',
   technicalInformation: 'CLM for Public certs. Technical questionnaire provided https://evertrustfr.sharepoint.com/:x:/s/Intranet/IQDFkVHzoJwZRqcUglhQWVDEAWqtDNapiLkQgpU58LHFOJg?e=plOODy',
-  decisionnaires: '', besoin: "CLM for Let's Encrypt and Globalsign Certs", blocker: '', dealtype: 'NEWBUSINESS', description: '',
+  decisionnaires: '', besoin: "CLM for Let's Encrypt and Globalsign Certs", blocker: '', dealtype: 'NEWBUSINESS', typeOfNegotiation: 'RFX', description: '',
   hosting: ['SAAS'], salesChannel: 'INDIRECT', dataQualityMissing: 'Decision-maker', dealActualPartner: null, deletedAt: null,
 };
 
@@ -20,7 +20,7 @@ describe('Twenty client', () => {
   it('maps the Sefe opportunity', async () => {
     const fetch = fakeFetch(json({ data: { opportunity } }));
     const result = await client(fetch).getOpportunity(opportunity.id);
-    expect(result).toMatchObject({ id: opportunity.id, hosting: ['SAAS'], hasActualPartner: false });
+    expect(result).toMatchObject({ id: opportunity.id, hosting: ['SAAS'], hasActualPartner: false, typeOfNegotiation: 'RFX' });
     expect(fetch).toHaveBeenCalledWith('https://crm.test/rest/opportunities/2341bae4-2621-4cf5-b5f3-ffe7ae25362d', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer k', Accept: 'application/json' }) }));
   });
 

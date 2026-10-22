@@ -20,7 +20,7 @@ export function baseFacts(): Facts {
     requester: { name: 'Alex Martin', linearUserId: 'user-alex' },
     link: { kind: 'opportunity', id: OPP_ID }, linkedRecordFound: true, companyId: COMPANY_ID,
     deal: {
-      opportunity: { id: OPP_ID, companyId: COMPANY_ID, dealtype: 'NEWBUSINESS', hosting: ['SAAS'], decisionnaires: 'CISO', besoin: 'CLM for internal PKI', technicalInformation: 'ADCS today', blocker: '', description: '', salesChannel: 'DIRECT', hasActualPartner: true, dataQualityMissing: '' },
+      opportunity: { id: OPP_ID, companyId: COMPANY_ID, dealtype: 'NEWBUSINESS', typeOfNegotiation: null, hosting: ['SAAS'], decisionnaires: 'CISO', besoin: 'CLM for internal PKI', technicalInformation: 'ADCS today', blocker: '', description: '', salesChannel: 'DIRECT', hasActualPartner: true, dataQualityMissing: '' },
       dealType: 'NEWBUSINESS', notes: [{ id: 'note-1', createdAt: '2026-09-01T10:00:00.000Z', bodyMarkdown: 'Discovery call done.', target: 'opportunity' }], hasPocQuote: false,
       qualification: { items: { volume: documented, hosting: documented, solution: documented, decisionMaker: documented, budget: documented, timeline: documented, currentPki: documented, useCases: documented, clmDriver: documented }, volume: { min: 1000, max: 1000, unitIsClmManagedCerts: true, unclear: false, evidence: ev('1000 certificates', 'note-1') }, solutionIncludesClm: true },
       noteFacts: { discoveryEvidence: null, pocQuoteExpectedEvidence: null, approverException: null, partnerNamed: null },

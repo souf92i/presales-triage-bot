@@ -62,10 +62,11 @@ If the file at `CONFIG_PATH` does not exist, the bot uses all defaults. An unkno
 Rule ids:
 
 - `single-request`: the ticket has only one request.
-- `crm-link`: the CRM link is valid and the record exists.
-- `notes-exist`: the deal has at least one CRM note.
-- `qualification`: the new-business deal has enough known qualification items.
-- `volume-floor`: the new-business deal volume is at least `minDealVolume`.
+- `crm-link`: the CRM link is valid and the record exists. An RFx ticket must link the Twenty opportunity of that RFI, RFQ or RFP.
+- `rfx-deal`: an RFx ticket links an opportunity whose type of negotiation is RFX.
+- `notes-exist`: the deal has at least one CRM note. This rule does not apply to RFx tickets.
+- `qualification`: the new-business deal has enough known qualification items. This rule does not apply to RFx tickets.
+- `volume-floor`: the new-business deal volume is at least `minDealVolume`. This rule does not apply to RFx tickets.
 - `discovery-first`: a new-business demo or PoC has a recent technical discovery.
 - `slot`: a demo or technical discovery has a complete future slot and a free active pool member.
 - `poc-volume`: the new-business PoC volume is at least `minPocVolume`.
