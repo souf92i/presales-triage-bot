@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { qualificationRule } from '../../src/rules/qualification.js';
-import { baseFacts, ctx, noDeal, withDeal, withItem, withOpportunity, withVolume } from '../helpers/facts.js';
+import { asKind, baseFacts, ctx, noDeal, withDeal, withItem, withOpportunity, withVolume } from '../helpers/facts.js';
 
 describe('qualification rule', () => {
   it('passes when all qualification items are known', () => {
@@ -46,5 +46,9 @@ describe('qualification rule', () => {
 
   it('skips when there is no valid opportunity', () => {
     expect(qualificationRule.applies(ctx(noDeal(baseFacts(), { kind: 'company', id: 'company-1' }, true)))).toEqual({ applies: false, reason: 'no valid opportunity' });
+  });
+
+  it('skips on rfx', () => {
+    expect(qualificationRule.applies(ctx(asKind(baseFacts(), 'rfx')))).toEqual({ applies: false, reason: 'not applicable to rfx' });
   });
 });

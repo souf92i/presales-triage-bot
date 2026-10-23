@@ -9,7 +9,7 @@ describe('verdict assembly', () => {
     const result = evaluateRules(ctx(baseFacts()));
 
     expect(result.verdict).toBe('accepted');
-    expect(result.results).toHaveLength(9);
+    expect(result.results).toHaveLength(10);
     expect(result.results.slice(-2).map((result) => result.outcome)).toEqual([
       { kind: 'skip', reason: 'not applicable to demo' },
       { kind: 'skip', reason: 'not applicable to demo' },

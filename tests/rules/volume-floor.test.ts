@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { volumeFloorRule } from '../../src/rules/volume-floor.js';
-import { baseFacts, ctx, ev, withDeal, withVolume } from '../helpers/facts.js';
+import { asKind, baseFacts, ctx, ev, withDeal, withVolume } from '../helpers/facts.js';
 
 describe('volume-floor rule', () => {
   const volume = (min: number, max: number) => ({ min, max, unitIsClmManagedCerts: true, unclear: false, evidence: ev(`${max} certificates`) });
@@ -26,5 +26,8 @@ describe('volume-floor rule', () => {
   });
   it('skips upsells', () => {
     expect(volumeFloorRule.applies(ctx(withDeal(baseFacts(), { dealType: 'UPSALE' })))).toEqual({ applies: false, reason: 'deal type is not NEWBUSINESS' });
+  });
+  it('skips on rfx', () => {
+    expect(volumeFloorRule.applies(ctx(asKind(baseFacts(), 'rfx')))).toEqual({ applies: false, reason: 'not applicable to rfx' });
   });
 });

@@ -12,7 +12,7 @@ const noteSchema = z.object({ id: z.string(), createdAt: z.string(), bodyV2: z.o
 const quoteSchema = z.object({ id: z.string(), opportunityId: z.string(), status: z.enum(QUOTE_STATUSES), deletedAt: z.string().nullable() });
 const quoteLineSchema = z.object({ id: z.string(), quoteId: z.string(), productId: z.string().nullable(), name: nullableText, description: nullableText, deletedAt: z.string().nullable() });
 const opportunitySchema = z.object({
-  id: z.string(), companyId: z.string().nullable(), dealtype: nullableText, hosting: z.array(z.string()).nullable(),
+  id: z.string(), companyId: z.string().nullable(), dealtype: nullableText, typeOfNegotiation: nullableText, hosting: z.array(z.string()).nullable(),
   decisionnaires: nullableText, besoin: nullableText, technicalInformation: nullableText, blocker: nullableText, description: nullableText,
   salesChannel: nullableText, dataQualityMissing: nullableText, dealActualPartner: z.unknown().optional(), dealActualPartnerId: z.unknown().optional(), deletedAt: z.string().nullable(),
 }).superRefine((record, context) => {
@@ -70,7 +70,7 @@ export function createTwentyClient(opts: { baseUrl: string; apiKey: string; fetc
       const record = wrapper.data.opportunity;
       if (record === null || record.deletedAt !== null) return null;
       return {
-        id: record.id, companyId: record.companyId, dealtype: record.dealtype, hosting: record.hosting ?? [],
+        id: record.id, companyId: record.companyId, dealtype: record.dealtype, typeOfNegotiation: record.typeOfNegotiation, hosting: record.hosting ?? [],
         decisionnaires: record.decisionnaires ?? '', besoin: record.besoin ?? '', technicalInformation: record.technicalInformation ?? '',
         blocker: record.blocker ?? '', description: record.description ?? '', salesChannel: record.salesChannel,
         hasActualPartner: record.dealActualPartnerId != null || record.dealActualPartner != null, dataQualityMissing: record.dataQualityMissing ?? '',

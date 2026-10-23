@@ -1,4 +1,4 @@
-import { isDealContext, isNewBusiness, REASON, requireAll } from './applicability.js';
+import { isDealContext, isNewBusiness, isNotRfx, REASON, requireAll } from './applicability.js';
 import type { Rule } from './types.js';
 
 export const volumeFloorRule: Rule = {
@@ -6,6 +6,7 @@ export const volumeFloorRule: Rule = {
   applies: ({ facts }) => requireAll(
     [isDealContext(facts), REASON.noDeal],
     [isNewBusiness(facts), REASON.notNewBusiness],
+    [isNotRfx(facts), REASON.kind(facts.ticket.requestKind)],
   ),
   evaluate: ({ facts, config }) => {
     const volume = facts.deal!.qualification.volume;

@@ -23,6 +23,7 @@ export type CrmLink =
 export type DealType = 'NEWBUSINESS' | 'EXISTINGBUSINESS' | 'UPSALE' | 'ADDITIONAL_YEAR';
 export interface Opportunity {
   readonly id: string; readonly companyId: string | null; readonly dealtype: string | null;
+  readonly typeOfNegotiation: string | null;
   readonly hosting: readonly string[];
   readonly decisionnaires: string; readonly besoin: string; readonly technicalInformation: string;
   readonly blocker: string; readonly description: string;

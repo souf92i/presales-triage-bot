@@ -15,6 +15,10 @@ export function isNewBusiness(facts: Facts): boolean {
   return facts.deal?.dealType === 'NEWBUSINESS';
 }
 
+export function isNotRfx(facts: Facts): boolean {
+  return facts.ticket.requestKind !== 'rfx';
+}
+
 export function requireAll(...checks: readonly (readonly [boolean, string])[]): Applicability {
   const failed = checks.find(([passes]) => !passes);
   return failed === undefined ? { applies: true } : { applies: false, reason: failed[1] };

@@ -1,5 +1,5 @@
 import { QUALIFICATION_ITEMS } from '../domain/types.js';
-import { isDealContext, isNewBusiness, REASON, requireAll } from './applicability.js';
+import { isDealContext, isNewBusiness, isNotRfx, REASON, requireAll } from './applicability.js';
 import type { Rule } from './types.js';
 
 export const qualificationRule: Rule = {
@@ -7,6 +7,7 @@ export const qualificationRule: Rule = {
   applies: ({ facts }) => requireAll(
     [isDealContext(facts), REASON.noDeal],
     [isNewBusiness(facts), REASON.notNewBusiness],
+    [isNotRfx(facts), REASON.kind(facts.ticket.requestKind)],
   ),
   evaluate: ({ facts, config }) => {
     const deal = facts.deal!;

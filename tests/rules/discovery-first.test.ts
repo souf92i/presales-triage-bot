@@ -32,4 +32,7 @@ describe('discovery-first rule', () => {
   it('skips additional-year deals', () => {
     expect(discoveryFirstRule.applies(ctx(withDeal(baseFacts(), { dealType: 'ADDITIONAL_YEAR' })))).toEqual({ applies: false, reason: 'deal type is not NEWBUSINESS' });
   });
+  it('skips on rfx', () => {
+    expect(discoveryFirstRule.applies(ctx(asKind(baseFacts(), 'rfx')))).toEqual({ applies: false, reason: 'not applicable to rfx' });
+  });
 });

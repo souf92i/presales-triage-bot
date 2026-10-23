@@ -1,12 +1,13 @@
 import type { Config } from '../config.js';
 import type { Facts, QualificationItemId, Random, RequestKind } from '../domain/types.js';
 
-export const RULE_IDS = ['single-request', 'crm-link', 'notes-exist', 'qualification', 'volume-floor', 'discovery-first', 'slot', 'poc-volume', 'poc-paid'] as const;
+export const RULE_IDS = ['single-request', 'crm-link', 'rfx-deal', 'notes-exist', 'qualification', 'volume-floor', 'discovery-first', 'slot', 'poc-volume', 'poc-paid'] as const;
 export type RuleId = (typeof RULE_IDS)[number];
 export type Deny =
   | { key: 'single_request.multiple'; items: readonly { kind: RequestKind; quote: string }[] }
   | { key: 'crm_link.invalid'; raw: string; partnerOnly: boolean }
   | { key: 'crm_link.not_found'; recordKind: 'opportunity' | 'company'; id: string }
+  | { key: 'rfx_deal.not_rfx' }
   | { key: 'notes_exist.none'; maxAgeMonths: number }
   | { key: 'qualification.missing'; items: readonly { id: QualificationItemId; status: 'missing' | 'declared_unobtainable' }[]; maxUnknown: number; dataQualityMissing: string }
   | { key: 'volume_floor.below_min'; max: number; min: number }

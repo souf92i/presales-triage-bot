@@ -19,7 +19,7 @@ const issueSchema = z.object({
 const commentSchema = z.object({ id: z.string(), issueId: z.string(), body: z.string(), createdAt: z.string(), parentId: z.string().nullable(), authorId: z.string().nullable(), authorName: z.string() });
 const userSchema = z.object({ id: z.string(), name: z.string(), displayName: z.string(), email: z.string() });
 const opportunitySchema = z.object({
-  id: z.string(), companyId: z.string().nullable(), dealtype: z.string().nullable(), hosting: z.array(z.string()),
+  id: z.string(), companyId: z.string().nullable(), dealtype: z.string().nullable(), typeOfNegotiation: z.string().nullable(), hosting: z.array(z.string()),
   decisionnaires: z.string(), besoin: z.string(), technicalInformation: z.string(), blocker: z.string(), description: z.string(),
   salesChannel: z.string().nullable(), hasActualPartner: z.boolean(), dataQualityMissing: z.string(), deleted: z.boolean().optional(),
 });
